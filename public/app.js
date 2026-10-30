@@ -134,19 +134,26 @@ function renderTopics() {
   }
 }
 
-// Change the active workspace without navigating away from the signed-in session.
+// Select a workspace page, update its heading, and keep navigation accessible.
 function showView(view) {
-  for (const name of ['platforms', 'planner', 'review', 'skills', 'connections']) {
+  const topics = view === 'skills';
+  if (topics) view = 'platforms';
+  const pages = {today: ['Today', 'Your tasks, deadlines, and daily progress.'], platforms: ['Practice', 'Your coding profiles and areas of practice.'], planner: ['Planner', 'Make a plan for today and what comes next.'], review: ['Insights', 'Review your week and track your goals.'], connections: ['Settings', 'Profiles, reminders, and your account.']};
+  if (!pages[view]) view = 'today';
+  for (const name of Object.keys(pages)) {
     $(`#view-${name}`).hidden = name !== view;
     $(`[data-view="${name}"]`).setAttribute('aria-pressed', String(name === view));
   }
+  $('#page-title').textContent = pages[view][0];
+  $('#page-description').textContent = pages[view][1];
+  if (topics) $('#view-skills').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 // Save a task edit and keep the control disabled until Firestore acknowledges it.
 async function changeTask(task, changes, control) {
   control.disabled = true;
   try { await updateDoc(doc(records('todos'), task.id), changes); }
-  catch (error) { report(error); renderTodos(); }
+  catch (error) { report(error); renderTodos(); renderToday(); }
   finally { control.disabled = false; }
 }
 
@@ -166,35 +173,76 @@ function renderTodos() {
   $('#todos').replaceChildren();
   const visible = selectTasks(todos, taskFilter, day, $('#task-date').value);
   if (!visible.length) $('#todos').append(element('p', 'Nothing here. Plan a small step or enjoy a clear slate.', 'empty-state'));
-  for (const task of visible) {
-    const item = element('div', '', 'item'), body = element('div', task.title, 'body' + (task.done ? ' done' : ''));
-    const check = element('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `Complete ${task.title}`);
-    check.onchange = () => changeTask(task, {done: check.checked, completedAt: check.checked ? new Date().toISOString() : ''}, check);
-    const remove = element('button', 'Delete'); remove.onclick = () => deleteDoc(doc(records('todos'), task.id)).catch(report);
-    const status = taskStatus(task, day);
-    body.append(element('small', `${task.category || 'General'} · ${task.priority} priority · ${task.due || 'No date'} · ${status}`));
-    if (status === 'missed') item.classList.add('missed');
-    if (task.notes) body.append(element('p', task.notes, 'task-notes'));
-    if (task.originalDue && task.originalDue !== task.due) body.append(element('small', `Originally due ${task.originalDue}`));
-    const actions = element('div', '', 'task-actions');
-    const routine = routines.find(routine => routine.id === task.seriesId);
-    if (routine) {
-      body.append(element('small', routine.enabled ? `Repeats ${routine.frequency}` : 'Repeating schedule stopped'));
-      if (routine.enabled) {
-        const stop = element('button', 'Stop repeating'); stop.onclick = () => updateDoc(doc(records('routines'), routine.id), {enabled: false}).catch(report); actions.append(stop);
-      }
+  for (const task of visible) $('#todos').append(taskRow(task));
+}
+
+// Build a compact task row with completion and expandable scheduling controls.
+function taskRow(task) {
+  const day = today();
+  const item = element('div', '', 'item'), body = element('div', task.title, 'body' + (task.done ? ' done' : ''));
+  const check = element('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `Complete ${task.title}`);
+  check.onchange = () => changeTask(task, {done: check.checked, completedAt: check.checked ? new Date().toISOString() : ''}, check);
+  const remove = element('button', 'Delete'); remove.onclick = () => deleteDoc(doc(records('todos'), task.id)).catch(report);
+  const status = taskStatus(task, day);
+  body.append(element('small', `${task.category || 'General'} · ${task.priority} priority · ${task.due || 'No date'} · ${status}`));
+  if (status === 'missed') item.classList.add('missed');
+
+  if (task.originalDue && task.originalDue !== task.due) body.append(element('small', `Originally due ${task.originalDue}`));
+  const actions = element('details', '', 'task-actions'); actions.append(element('summary', 'Details & actions'));
+  const routine = routines.find(routine => routine.id === task.seriesId);
+  if (routine) {
+    body.append(element('small', routine.enabled ? `Repeats ${routine.frequency}` : 'Repeating schedule stopped'));
+    if (routine.enabled) {
+      const stop = element('button', 'Stop repeating'); stop.onclick = () => updateDoc(doc(records('routines'), routine.id), {enabled: false}).catch(report); actions.append(stop);
     }
-    if (!task.done) {
-      const tomorrow = element('button', 'Move to tomorrow');
-      tomorrow.onclick = () => changeTask(task, reschedule(task, shift(today(), 1)), tomorrow);
-      const date = element('input'); date.type = 'date'; date.value = task.due; date.setAttribute('aria-label', `Reschedule ${task.title}`);
-      const move = element('button', 'Set date');
-      move.onclick = () => { try { changeTask(task, reschedule(task, date.value), move); } catch (error) { report(error); } };
-      actions.append(tomorrow, date, move);
-    }
-    actions.append(remove); body.append(actions);
-    item.append(check, body); $('#todos').append(item);
   }
+  if (!task.done) {
+    const tomorrow = element('button', 'Move to tomorrow');
+    tomorrow.onclick = () => changeTask(task, reschedule(task, shift(today(), 1)), tomorrow);
+    const date = element('input'); date.type = 'date'; date.value = task.due; date.setAttribute('aria-label', `Reschedule ${task.title}`);
+    const move = element('button', 'Set date');
+    move.onclick = () => { try { changeTask(task, reschedule(task, date.value), move); } catch (error) { report(error); } };
+    actions.append(tomorrow, date, move);
+  }
+  if (task.notes) actions.append(element('p', task.notes, 'task-notes'));
+  actions.append(remove); body.append(actions);
+  item.dataset.priority = task.priority;
+  item.append(check, body);
+  return item;
+}
+
+// Summarize today's real task and coding data without treating missing history as zero.
+function renderToday() {
+  const day = today(), due = todos.filter(t => t.due === day), done = due.filter(t => t.done).length;
+  const missed = todos.filter(t => taskStatus(t, day) === 'missed');
+  const linked = platforms.filter(p => profiles[p]), changes = linked.map(p => delta(rows, p, day));
+  const measured = changes.filter(v => v != null);
+  const solved = measured.length ? measured.reduce((sum, n) => sum + Math.max(0, n), 0) : '—';
+  $('#today-stats').replaceChildren();
+  for (const [label, value, note] of [['Tasks complete', `${done} / ${due.length}`, 'Due today'], ['Problems solved', solved, `${measured.length}/${linked.length} platform changes measured`], ['Overdue tasks', missed.length, missed.length ? 'Ready to reschedule' : 'No missed deadlines']]) {
+    const stat = element('div', '', 'today-stat'); stat.append(element('span', label, 'muted'), element('strong', value), element('small', note, 'muted')); $('#today-stats').append(stat);
+  }
+  const focus = selectTasks(todos, 'today', day, day);
+  $('#today-tasks').replaceChildren();
+  for (const task of focus) $('#today-tasks').append(taskRow(task));
+  if (!focus.length) {
+    const empty = element('div', '', 'empty-state'); empty.append(element('span', '✓', 'empty-icon'), element('h3', 'A clear day starts here.'), element('p', 'Add a task to plan your next step.'));
+    const add = element('button', '+ Add your first task', 'primary'); add.onclick = openTask; empty.append(add); $('#today-tasks').append(empty);
+  }
+  const goal = goals.filter(g => (!g.username || g.username === profiles[g.platform]) && latest(g.platform)?.solved < g.target).sort((a,b) => a.deadline.localeCompare(b.deadline))[0];
+  $('#today-goal-title').textContent = goal ? `${goal.target} on ${names[goal.platform]}` : 'Set a goal';
+  $('#today-goal-note').textContent = goal ? `${goalProgress(goal, latest(goal.platform).solved, day).perDay}/day needed · due ${goal.deadline}` : 'Choose a target and deadline to see your daily pace here.';
+  $('#today-upcoming').replaceChildren();
+  const upcoming = todos.filter(t => !t.done && t.due > day && t.due <= shift(day, 7)).sort((a,b) => a.due.localeCompare(b.due)).slice(0, 5);
+  for (const task of upcoming) { const row = element('div', '', 'upcoming-task'); row.append(element('span', task.title), element('small', `${task.due === shift(day, 1) ? 'Tomorrow' : task.due} · ${task.priority}`, 'muted')); $('#today-upcoming').append(row); }
+  if (!upcoming.length) $('#today-upcoming').append(element('p', 'No deadlines in the next 7 days.', 'muted'));
+}
+
+// Open the quick task dialog with today's date and focus the task title.
+function openTask() {
+  $('#todo-form [name="due"]').value = today();
+  $('#task-dialog').showModal();
+  $('#todo-form [name="title"]').focus();
 }
 
 // Queue a user's refresh request without allowing changes to server-owned sync metadata.
@@ -243,12 +291,12 @@ function renderGoals() {
 // Refresh all date-sensitive displays from the current local cache.
 function render() {
   rows = allRows.filter(r => profiles[r.platform] && r.username === profiles[r.platform]);
-  $('#date').textContent = `${today()} / YOUR DAILY CHECK-IN`;
+  $('#date').textContent = new Intl.DateTimeFormat('en-IN', {timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long'}).format(new Date());
   $('#connection-count').textContent = `${Object.keys(profiles).length} / 4 connected`;
   const pending = account.syncRequest && account.syncRequest !== account.lastSyncRequest;
   $('#sync-status').textContent = pending ? 'Refresh queued. Keep working; your cards update when the worker finishes.' : account.lastSyncAt ? `Last sync ${new Date(account.lastSyncAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST` : 'Connect a public profile to start your history.';
   $('#sync').disabled = !Object.keys(profiles).length || Boolean(pending);
-  renderCards(); renderChart(); renderTopics(); renderTodos(); renderGoals(); renderReview();
+  renderCards(); renderChart(); renderTopics(); renderTodos(); renderGoals(); renderReview(); renderToday();
 }
 
 // Subscribe only to the verified user's own private workspace.
@@ -257,9 +305,10 @@ async function session(user) {
   ownerUid = user?.uid || null;
   const version = ++generation;
   const allowed = user && user.emailVerified;
-  if (!allowed) $('#account-name').textContent = 'A little more deliberate.';
+  if (!allowed) $('#account-name').textContent = 'Your student workspace.';
   $('#login').hidden = allowed; $('#dashboard').hidden = !allowed; $('#logout').hidden = !user;
   $('#identity').textContent = user && !allowed ? 'Use a verified Google account to continue.' : '';
+  document.body.classList.toggle('signed-in', Boolean(allowed));
   if (!allowed) return;
   try {
     const deletion = await getDoc(doc(db, 'users', ownerUid, 'accountRequests', 'deletion'));
@@ -271,7 +320,7 @@ async function session(user) {
   } catch (error) { report(error); return; }
   if (generation !== version) return;
   const initialView = new URLSearchParams(location.search).get('view');
-  if (['platforms', 'planner', 'review', 'skills', 'connections'].includes(initialView)) showView(initialView);
+  showView(initialView || 'today');
   $('#account-name').textContent = user.displayName || user.email || 'Your workspace';
   $('#message').textContent = '';
   subscriptions.push(onSnapshot(doc(db, 'users', ownerUid), snapshot => {
@@ -280,7 +329,7 @@ async function session(user) {
     const changed = JSON.stringify(profiles) !== JSON.stringify(account.profiles || {});
     profiles = account.profiles || {};
     if (changed) for (const platform of platforms) $('#connections-form').elements[platform].value = profiles[platform] ? profileUrl(platform, profiles[platform]) : '';
-    if (!Object.keys(profiles).length) showView('connections');
+    if (!Object.keys(profiles).length && changed) showView('connections');
     render();
   }, report));
   for (const name of ['snapshots', 'todos', 'goals', 'skills', 'routines']) {
@@ -302,13 +351,21 @@ async function session(user) {
 async function submit(event, action) {
   event.preventDefault();
   const form = event.target, button = form.querySelector('button[type="submit"], button:not([type])'); button.disabled = true;
-  try { await action(new FormData(form)); if (form.id !== 'connections-form') form.reset(); if (form.id === 'todo-form') form.elements.due.value = today(); $('#message').textContent = 'Saved.'; }
+  try { await action(new FormData(form)); if (form.id !== 'connections-form') form.reset(); if (form.id === 'todo-form') { form.elements.due.value = today(); $('#task-dialog').close(); } $('#message').textContent = 'Saved.'; setTimeout(() => { if ($('#message').textContent === 'Saved.') $('#message').textContent = ''; }, 3500); }
   catch (error) { report(error); }
   finally { button.disabled = false; }
 }
 
 // Start Firebase and wire dashboard forms without requiring a build step.
 function start() {
+  $('#view-platforms').append($('#view-skills')); $('#view-skills').hidden = false;
+  $('#view-review').append($('#goal-form').closest('.panel'));
+  document.querySelectorAll('[data-add-task]').forEach(button => { button.onclick = openTask; });
+  document.querySelectorAll('[data-go]').forEach(button => { button.onclick = () => showView(button.dataset.go); });
+  $('#task-cancel').onclick = () => $('#task-dialog').close();
+  document.addEventListener('keydown', event => {
+    if (event.key.toLowerCase() === 'n' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.target.closest('input, textarea, select, dialog, [contenteditable]') && auth?.currentUser && !document.querySelector('dialog[open]')) { event.preventDefault(); openTask(); }
+  });
   for (const select of [$('#chart-platform'), $('#goal-form select'), $('#topic-platform')]) {
     for (const platform of platforms) { const option = element('option', names[platform]); option.value = platform; select.append(option); }
   }

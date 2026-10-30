@@ -149,7 +149,7 @@ gh secret set TELEGRAM_CHAT_ID --repo bharat24082007-spec/bharat_tracker
 
 ### Account export and deletion
 
-Under **Connections → Account & data**, **Download my data** exports the full private workspace as JSON, including recurring schedules and reminder preferences. Device push tokens, internal delivery receipts, and security markers are excluded. Keep the downloaded file private.
+Under **Settings → Account & data**, **Download my data** exports the full private workspace as JSON, including recurring schedules and reminder preferences. Device push tokens, internal delivery receipts, and security markers are excluded. Keep the downloaded file private.
 
 Account deletion requires typing `DELETE` and completing a fresh Google verification. It queues only the signed-in user's cleanup request and immediately locks that workspace. The worker deletes that Firebase Authentication user and recursively removes their Firestore workspace. It does not delete their Google account. A minimal UID security marker remains outside the workspace to prevent unexpired login tokens from recreating deleted data. Cleanup is irreversible, can take several minutes, and is retried if a run is interrupted. A later Google sign-in creates a new Firebase user and empty workspace after cleanup.
 
@@ -162,3 +162,10 @@ npx firebase deploy --only firestore:rules,hosting --project bharat-tracker-bdcf
 Hosting publishes only `public/`. A static frontend deployment does not start the Python worker: Actions or the local watcher must also run. No build step is needed. Open `https://bharat-tracker-bdcf0.web.app` and test Google sign-in. Internet access is needed for Firebase SDK modules and optional Google Fonts.
 
 Latest deployment validation: the scheduled worker completed successfully with all four linked profiles available. Python ran 28 tests (one emulator-only skip), and all 9 JavaScript tests passed. Firestore rules and recursive cleanup also passed separately against the demo emulator. Local browser fixtures verified recurring tasks, completion timestamps, export, and the deletion confirmation flow without deleting a production account. The deployed app restored Google sign-in, displayed the weekly review and account controls, and received a real foreground push test. Background notification display still depends on the device/browser permission and operating-system settings.
+
+
+### Workspace navigation
+
+The app opens on **Today**, with due and overdue tasks, measured coding progress, upcoming deadlines, and the nearest unfinished goal. **Practice** contains profile totals, charts, heatmap, and topic breakdowns. **Planner** provides date filters and scheduling; **Insights** combines the weekly review and goals. **Settings** holds profiles, notifications, export, and account controls.
+
+Use **+ Add task** from any page, or press **N** outside a text field, to open the task dialog. Escape or the close button dismisses it. Task rows keep notes, rescheduling, and deletion under **Details & actions**. Desktop uses a sidebar; phones use bottom navigation. Browser checks with sample data verified task creation, recurring schedules, forwarding to tomorrow, dialog dismissal, and mobile navigation without horizontal overflow. No production tasks were created during these checks.
