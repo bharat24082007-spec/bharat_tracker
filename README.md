@@ -2,7 +2,7 @@
 
 A multi-user student workspace: public coding profiles, a private planner, topic progress, goals, and daily history. Plain Python + buildless JavaScript + Firebase Authentication, Firestore, and Hosting.
 
-Live app: **https://bharat-tracker-bdcf0.web.app**. Source and schedules: **https://github.com/bharat24082007-spec/bharat_tracker**.
+Live app: **https://momentum-student-workspace.web.app**. Source and schedules: **https://github.com/bharat24082007-spec/bharat_tracker**.
 
 Deployment checked October 31, 2026: 14 Python tests, 7 JavaScript tests, and the Firestore isolation test passed. The first GitHub-hosted run successfully fetched and saved all four connected platforms. A dedicated `progress-runner` service account has Cloud Datastore User access; its JSON key is stored in the repository secret, not a local file. `OWNER_UID` is configured. Telegram delivery still needs the bot token and chat ID secrets; it has not been tested or enabled without those values.
 
@@ -123,7 +123,7 @@ The public VAPID certificate is in `public/config.js`; its private key stays wit
 
 The service worker caches only an offline page and public icons, not personal data. The app needs a network connection to read/write its workspace and receive reminders. Email summaries remain a later optional feature.
 
-Web-push deployment verification: 19 Python tests, 7 JavaScript tests, and the Firestore rules emulator test pass. The GitHub runner completes with the push processor enabled. Final device delivery requires that device's browser permission and a registered subscription; use **Send a test** after enabling. For an older cached page, open `https://bharat-tracker-bdcf0.web.app/?v=push1` once. Future assets revalidate instead of staying cached for an hour.
+Web-push deployment verification: 19 Python tests, 7 JavaScript tests, and the Firestore rules emulator test pass. The GitHub runner completes with the push processor enabled. Final device delivery requires that device's browser permission and a registered subscription; use **Send a test** after enabling. For an older cached page, open `https://momentum-student-workspace.web.app/?v=push1` once. Future assets revalidate instead of staying cached for an hour.
 
 ### Legacy owner-only Telegram (optional)
 
@@ -159,7 +159,7 @@ For a new deployment, run `node scripts/setup-deletion.cjs` once. It grants the 
 npx firebase deploy --only firestore:rules,hosting --project bharat-tracker-bdcf0
 ```
 
-Hosting publishes only `public/`. A static frontend deployment does not start the Python worker: Actions or the local watcher must also run. No build step is needed. Open `https://bharat-tracker-bdcf0.web.app` and test Google sign-in. Internet access is needed for Firebase SDK modules and optional Google Fonts.
+Hosting publishes only `public/`. A static frontend deployment does not start the Python worker: Actions or the local watcher must also run. No build step is needed. Open `https://momentum-student-workspace.web.app` and test Google sign-in. Internet access is needed for Firebase SDK modules and optional Google Fonts.
 
 Latest deployment validation: the scheduled worker completed successfully with all four linked profiles available. Python ran 28 tests (one emulator-only skip), and all 9 JavaScript tests passed. Firestore rules and recursive cleanup also passed separately against the demo emulator. Local browser fixtures verified recurring tasks, completion timestamps, export, and the deletion confirmation flow without deleting a production account. The deployed app restored Google sign-in, displayed the weekly review and account controls, and received a real foreground push test. Background notification display still depends on the device/browser permission and operating-system settings.
 
@@ -169,3 +169,6 @@ Latest deployment validation: the scheduled worker completed successfully with a
 The app opens on **Today**, with due and overdue tasks, measured coding progress, upcoming deadlines, and the nearest unfinished goal. **Practice** contains profile totals, charts, heatmap, and topic breakdowns. **Planner** provides date filters and scheduling; **Insights** combines the weekly review and goals. **Settings** holds profiles, notifications, export, and account controls.
 
 Use **+ Add task** from any page, or press **N** outside a text field, to open the task dialog. Escape or the close button dismisses it. Task rows keep notes, rescheduling, and deletion under **Details & actions**. Desktop uses a sidebar; phones use bottom navigation. Browser checks with sample data verified task creation, recurring schedules, forwarding to tomorrow, dialog dismissal, and mobile navigation without horizontal overflow. No production tasks were created during these checks.
+
+
+The product and installed app are named **Momentum**. Hosting deploys to `momentum-student-workspace` in the existing Firebase project. The internal project ID and Firebase Authentication helper domain remain the existing values so all accounts, stored history, and worker credentials continue to use the same backend. Sign in on the new origin and enable notifications there if desired; browser sessions and push permissions are scoped to each origin.
