@@ -1,7 +1,7 @@
 import {getMessaging, getToken, deleteToken, isSupported, onMessage} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-messaging.js';
 import {onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {doc, getDoc, setDoc, deleteDoc, onSnapshot, runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
-import {vapidKey} from './config.js';
+import {vapidKey} from './config.js?v=push1';
 
 // Connect install prompts, per-device subscriptions, private preferences, and test requests.
 export function initializeNotifications(app, auth, db) {

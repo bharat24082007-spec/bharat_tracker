@@ -1,7 +1,7 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {getFirestore, collection, doc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
-import {firebaseConfig} from './config.js';
+import {firebaseConfig} from './config.js?v=push1';
 import {profileUsername, profileUrl} from './profiles.js';
 import {platforms, today, shift, delta, streak, goalProgress} from './metrics.js';
 import {taskStatus, selectTasks, reschedule} from './planner.js';

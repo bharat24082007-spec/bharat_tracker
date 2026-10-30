@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#192e29"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="icon" type="image/png" href="icons/icon-192.png">
-  <title>Momentum · Student progress</title><link rel="stylesheet" href="style.css">
+  <title>Momentum · Student progress</title><link rel="stylesheet" href="style.css?v=push1">
 </head>
 <body>
   <header><a href="/" class="brand"><span class="brand-mark">m.</span> momentum<span class="brand-label">STUDENT WORKSPACE</span></a><span id="account-name" class="tag">A little more deliberate.</span><button id="logout" hidden>Sign out</button></header>
@@ -33,6 +33,6 @@
       <section id="view-connections" hidden><div class="connections-layout"><div class="connection-intro"><p class="eyebrow">MAKE IT YOURS</p><h2>One workspace.<br>Your public profiles.</h2><p>Paste a profile link or username. Connect the platforms you use; leave the others blank.</p><ul class="connection-facts"><li>Your tasks and history stay private.</li><li>Only public profile statistics are fetched.</li><li>Changing an account starts a separate visible history.</li></ul><p class="muted">HackerRank uses an unofficial third-party statistics service. GfG's endpoint is unofficial too. Manual entry is available when a provider cannot be reached.</p></div><section class="panel"><form id="connections-form"><label><span class="platform-name">LeetCode</span><input name="leetcode" placeholder="https://leetcode.com/u/your-username/" autocomplete="off"></label><label><span class="platform-name">CodeChef</span><input name="codechef" placeholder="https://www.codechef.com/users/your-username" autocomplete="off"></label><label><span class="platform-name">GeeksforGeeks</span><input name="gfg" placeholder="https://www.geeksforgeeks.org/user/your-username/" autocomplete="off"></label><label><span class="platform-name">HackerRank</span><input name="hackerrank" placeholder="https://www.hackerrank.com/profile/your-username" autocomplete="off"></label><button class="primary">Save connections & request sync</button><p class="muted">A refresh request is processed by the background worker. Clearing a field disconnects that platform without deleting its stored history.</p></form></section></div></section>
     </div>
   </main><footer><span class="footer-brand">momentum.</span><span>A record of the work. A plan for what's next.</span></footer>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=push1"></script>
 </body>
 </html>
