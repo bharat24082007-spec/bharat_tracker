@@ -45,7 +45,13 @@ export function initializeNotifications(app, auth, db) {
     const owner = uid, currentVersion = version;
     if (!owner) throw Error('Sign in before enabling reminders.');
     if (!('Notification' in window)) throw Error('This browser cannot receive push. Open Momentum in Chrome, Edge, or an installed supported web app.');
-    if (askPermission && Notification.permission === 'default') await Notification.requestPermission();
+    if (askPermission && Notification.permission === 'default') {
+      help.textContent = 'Choose Allow in the browser notification prompt. If no prompt appears here, open Momentum in Chrome or Edge, or use the installed Home Screen app on iPhone/iPad.';
+      await Promise.race([
+        Notification.requestPermission(),
+        new Promise((_, reject) => setTimeout(() => reject(Error('No permission response yet. Open this page in a supported browser and allow notifications, then try enabling again.')), 20000))
+      ]);
+    }
     if (Notification.permission !== 'granted') throw Error('Allow notifications in this browser’s site settings, then try again.');
     if (!await isSupported()) throw Error('Push is unavailable here. On iPhone/iPad, install with Add to Home Screen and open that app first.');
     if (!vapidKey) throw Error('The project web-push key has not been configured.');

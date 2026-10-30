@@ -36,7 +36,7 @@ self.addEventListener('activate', event => {
 
 // Show a clear offline page when a navigation cannot reach the network.
 self.addEventListener('fetch', event => {
-  if (event.request.mode === 'navigate') event.respondWith(fetch(event.request).catch(() => caches.match('/offline.html')));
+  if (event.request.mode === 'navigate') event.respondWith(fetch(event.request, {cache: 'no-store'}).catch(() => caches.match('/offline.html')));
 });
 
 // Open only this application's origin when a reminder is clicked.
