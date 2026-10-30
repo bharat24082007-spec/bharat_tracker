@@ -2,6 +2,10 @@
 
 A multi-user student workspace: public coding profiles, a private planner, topic progress, goals, and daily history. Plain Python + buildless JavaScript + Firebase Authentication, Firestore, and Hosting.
 
+Live app: **https://bharat-tracker-bdcf0.web.app**. Source and schedules: **https://github.com/bharat24082007-spec/bharat_tracker**.
+
+Deployment checked October 31, 2026: 14 Python tests, 7 JavaScript tests, and the Firestore isolation test passed. The first GitHub-hosted run successfully fetched and saved all four connected platforms. A dedicated `progress-runner` service account has Cloud Datastore User access; its JSON key is stored in the repository secret, not a local file. `OWNER_UID` is configured. Telegram delivery still needs the bot token and chat ID secrets; it has not been tested or enabled without those values.
+
 ## Use the app
 
 1. Sign in with Google. Each user has a separate private workspace.
@@ -94,6 +98,8 @@ Repository: https://github.com/bharat24082007-spec/bharat_tracker
 
 Under Settings → Secrets and variables → Actions, add `FIREBASE_SERVICE_ACCOUNT_JSON`. The service account needs Cloud Datastore User (`roles/datastore.user`), not project Owner. Do not use a personal Firebase CLI refresh token for unattended jobs.
 
+For a new deployment, `node scripts/setup-actions.cjs OWNER/REPOSITORY` can provision the dedicated runner using your Firebase CLI login and pass its generated key directly to `gh secret set` via stdin. Sign into both CLIs first. Existing secrets are preserved. This repository's runner credential has already been configured.
+
 The workflow processes every user's saved connections. `*/5 * * * *` checks periodically; GitHub schedules are best-effort and can be delayed. The original daily jobs remain: 02:00 UTC / 07:30 IST morning, 15:30 UTC / 21:00 IST evening, and 18:00 UTC / 23:30 IST snapshot. The workflow must be on the default branch. Use Actions → Daily progress → Run workflow to verify the first run. GitHub usage limits and disabled schedules can interrupt polling; monitor failed runs. The implementation processes users sequentially and is intended for a small community, not unbounded production scale.
 
 LeetCode may block GitHub-hosted IPs. If the same fetch works locally, use the local worker or a trusted self-hosted runner. Other platforms continue and blocked platforms stay unavailable. Don't commit cookies or attempt CAPTCHA bypasses.
@@ -110,6 +116,13 @@ python -m tracker.run --all --mode morning
 ```
 
 Send `/start` to the bot before running `get_chat_id.py`. It does not remove existing webhooks. Add the three environment values as GitHub Secrets for scheduled notifications. Only the explicitly configured OWNER_UID receives summaries in this bot chat; other users' tasks are never sent there. Self-service Telegram linking for other users is not implemented. Evening warnings require complete data proving zero activity. Manual reruns may send duplicate summaries.
+
+To finish the missing Telegram setup without pasting secrets into this chat, run these commands in your own terminal; GitHub CLI prompts for each value:
+
+```powershell
+gh secret set TELEGRAM_BOT_TOKEN --repo bharat24082007-spec/bharat_tracker
+gh secret set TELEGRAM_CHAT_ID --repo bharat24082007-spec/bharat_tracker
+```
 
 ## 7. Publish
 
