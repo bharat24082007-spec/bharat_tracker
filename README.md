@@ -172,3 +172,6 @@ Use **+ Add task** from any page, or press **N** outside a text field, to open t
 
 
 The product and installed app are named **Momentum**. Hosting deploys to `momentum-student-workspace` in the existing Firebase project. The internal project ID and Firebase Authentication helper domain remain the existing values so all accounts, stored history, and worker credentials continue to use the same backend. Sign in on the new origin and enable notifications there if desired; browser sessions and push permissions are scoped to each origin.
+
+
+The sign-in cover uses the supplied design from `ui/outputs/momentum-sign-in`. Its integrated styles live in `public/signin.css` and are scoped to `#login`; the sample preview is illustrative and never written to Firestore. The Google button uses the existing Firebase authentication handler. Test the signed-out cover locally with `node scripts/build-ui-fixture.cjs`, serve `artifacts/ui`, and open `/?signedout=1`. This fixture simulates sign-in and sign-out entirely in memory.

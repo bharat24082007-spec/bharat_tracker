@@ -1,6 +1,7 @@
 // In-memory Firebase substitute used only by the isolated UI test build.
 const data = new Map(), listeners = new Map();
 const user = {uid: 'ui-test', emailVerified: true, displayName: 'UI test workspace'};
+const fixtureAuth = {currentUser: new URLSearchParams(location.search).has('signedout') ? null : user}, authListeners = new Set();
 const day = new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Kolkata'}).format(new Date());
 data.set('users/ui-test', {profiles: {leetcode: 'sample-student'}, syncRequest: 'test', lastSyncRequest: 'test', lastSyncAt: new Date().toISOString()});
 data.set(`users/ui-test/snapshots/${day}_leetcode`, {platform: 'leetcode', username: 'sample-student', day, solved: 42, rating: 1450, fetched_at: new Date().toISOString(), status: 'ok', topics: {Array: 20, Graph: 6, 'Dynamic Programming': 8}, difficulty: {easy: 20, medium: 20, hard: 2}});
@@ -13,14 +14,14 @@ export function initializeApp() { return {}; }
 // Provide the fixture database handle.
 export function getFirestore() { return {path: ''}; }
 // Provide the fixture authentication handle.
-export function getAuth() { return {currentUser: user}; }
+export function getAuth() { return fixtureAuth; }
 export class GoogleAuthProvider {}
 // Start a test session without connecting to real authentication.
-export function onAuthStateChanged(auth, callback) { queueMicrotask(() => callback(user)); }
+export function onAuthStateChanged(auth, callback) { authListeners.add(callback); queueMicrotask(() => callback(auth.currentUser)); return () => authListeners.delete(callback); }
 // Resolve the test sign-in action without external requests.
-export async function signInWithPopup() { return user; }
-// Reload the isolated fixture after sign-out for repeatable tests.
-export async function signOut() { location.reload(); }
+export async function signInWithPopup() { fixtureAuth.currentUser = user; authListeners.forEach(callback => callback(user)); return user; }
+// Return to the sign-in page without contacting real Firebase or removing sample data.
+export async function signOut() { fixtureAuth.currentUser = null; authListeners.forEach(callback => callback(null)); }
 // Return a minimal document snapshot.
 function snapshot(path, value) { return {id: path.split('/').at(-1), data: () => value, exists: () => value !== undefined}; }
 // Notify active views after a fixture mutation.
