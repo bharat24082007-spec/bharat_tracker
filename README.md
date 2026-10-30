@@ -118,6 +118,8 @@ The public VAPID certificate is in `public/config.js`; its private key stays wit
 
 The service worker caches only an offline page and public icons, not personal data. The app needs a network connection to read/write its workspace and receive reminders. Email summaries remain a later optional feature.
 
+Web-push deployment verification: 19 Python tests, 7 JavaScript tests, and the Firestore rules emulator test pass. The GitHub runner completes with the push processor enabled. Final device delivery requires that device's browser permission and a registered subscription; use **Send a test** after enabling. For an older cached page, open `https://bharat-tracker-bdcf0.web.app/?v=push1` once. Future assets revalidate instead of staying cached for an hour.
+
 ### Legacy owner-only Telegram (optional)
 
 ```powershell
