@@ -160,3 +160,5 @@ npx firebase deploy --only firestore:rules,hosting --project bharat-tracker-bdcf
 ```
 
 Hosting publishes only `public/`. A static frontend deployment does not start the Python worker: Actions or the local watcher must also run. No build step is needed. Open `https://bharat-tracker-bdcf0.web.app` and test Google sign-in. Internet access is needed for Firebase SDK modules and optional Google Fonts.
+
+Latest deployment validation: the scheduled worker completed successfully with all four linked profiles available. Python ran 28 tests (one emulator-only skip), and all 9 JavaScript tests passed. Firestore rules and recursive cleanup also passed separately against the demo emulator. Local browser fixtures verified recurring tasks, completion timestamps, export, and the deletion confirmation flow without deleting a production account. The deployed app restored Google sign-in, displayed the weekly review and account controls, and received a real foreground push test. Background notification display still depends on the device/browser permission and operating-system settings.
