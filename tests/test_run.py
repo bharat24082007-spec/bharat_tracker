@@ -31,3 +31,22 @@ class MultiUserTests(unittest.TestCase):
             self.assertTrue(needs_sync({}))
             self.assertTrue(needs_sync({'lastSyncAt': '2026-10-30T12:00:00+05:30'}))
             self.assertFalse(needs_sync({'lastSyncAt': '2026-10-30T12:04:40+05:30', 'syncRequest': 'new'}))
+
+    # A corrupt handle must not prevent subsequent platforms from being fetched.
+    def test_invalid_handle_is_unavailable(self):
+        with patch('tracker.run.gfg.fetch', return_value={'status': 'ok', 'solved': 1}):
+            results = fetch_profiles({'leetcode': '../invalid', 'gfg': 'valid-user'})
+        self.assertEqual(results[0]['status'], 'unavailable')
+        self.assertEqual(results[1]['solved'], 1)
+
+    # Failed storage must not be advertised as a completed sync or trigger reminders.
+    def test_storage_failure_does_not_mark_sync_complete(self):
+        from tracker.run import main
+        root = MagicMock(id='owner')
+        root.get.return_value.to_dict.return_value = {'profiles': {'gfg': 'valid-user'}}
+        with patch('sys.argv', ['tracker', '--all']), patch('tracker.store.database'), patch('tracker.run.fetch_profiles', return_value=[{'platform': 'gfg', 'fetched_at': '2026-10-31T12:00:00+05:30'}]), patch('tracker.store.save', side_effect=RuntimeError), patch('tracker.store.save_sync_status') as metadata, patch('tracker.account.process_deletion', return_value=False), patch('tracker.account.pending_deletion_roots', return_value=[]), patch('tracker.routines.materialize_routines'), patch('tracker.push.process_notifications') as notify, patch('firebase_admin.firestore.client') as client:
+            client.return_value.collection.return_value.stream.return_value = [MagicMock(reference=root)]
+            with self.assertRaises(SystemExit):
+                main()
+            metadata.assert_not_called()
+            notify.assert_not_called()

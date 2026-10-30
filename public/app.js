@@ -126,7 +126,7 @@ function renderTopics() {
     bar.setAttribute('aria-label', `${name}: ${count} solved`);
     item.append(element('span', `${count} solved`), bar);
     if (platform !== 'leetcode') {
-      const saved = skills.find(s => s.platform === platform && s.topic === name);
+      const saved = skills.find(s => s.platform === platform && s.topic === name && (!s.username || s.username === profiles[platform]));
       const remove = element('button', 'Remove'); remove.onclick = () => deleteDoc(doc(records('skills'), saved.id)).catch(report);
       item.append(remove);
     }
@@ -226,8 +226,8 @@ function renderToday() {
   $('#today-tasks').replaceChildren();
   for (const task of focus) $('#today-tasks').append(taskRow(task));
   if (!focus.length) {
-    const empty = element('div', '', 'empty-state'); empty.append(element('span', '✓', 'empty-icon'), element('h3', 'A clear day starts here.'), element('p', 'Add a task to plan your next step.'));
-    const add = element('button', '+ Add your first task', 'primary'); add.onclick = openTask; empty.append(add); $('#today-tasks').append(empty);
+    const empty = element('div', '', 'empty-state'); empty.append(element('span', '✓', 'empty-icon'), element('h3', done ? "Today's tasks are complete." : 'A clear day starts here.'), element('p', done ? 'Your completed tasks are saved in Planner and Insights.' : 'Add a task to plan your next step.'));
+    const add = element('button', done ? '+ Plan another task' : '+ Add your first task', 'primary'); add.onclick = openTask; empty.append(add); $('#today-tasks').append(empty);
   }
   const goal = goals.filter(g => (!g.username || g.username === profiles[g.platform]) && latest(g.platform)?.solved < g.target).sort((a,b) => a.deadline.localeCompare(b.deadline))[0];
   $('#today-goal-title').textContent = goal ? `${goal.target} on ${names[goal.platform]}` : 'Set a goal';
@@ -308,6 +308,12 @@ async function session(user) {
   if (!allowed) $('#account-name').textContent = 'Your student workspace.';
   $('#login').hidden = allowed; $('#dashboard').hidden = !allowed; $('#logout').hidden = !user;
   $('#identity').textContent = user && !allowed ? 'Use a verified Google account to continue.' : '';
+  $('#push-received').textContent = '';
+  $('#account-status').textContent = '';
+  $('#connections-form').reset();
+  for (const name of ['cards', 'todos', 'today-tasks', 'today-upcoming', 'today-stats', 'topics', 'goals', 'review-stats', 'review-platforms', 'review-topics', 'review-tasks']) $('#' + name).replaceChildren();
+  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+  render();
   document.body.classList.toggle('signed-in', Boolean(allowed));
   if (!allowed) return;
   try {
@@ -439,7 +445,7 @@ function start() {
     const platform = data.get('platform'), topic = data.get('topic').trim(), count = Number(data.get('count'));
     if (!profiles[platform]) throw Error('Connect this platform first.');
     if (!topic || !Number.isSafeInteger(count) || count < 0) throw Error('Enter a topic and a whole solved count.');
-    const id = platform + '_' + encodeURIComponent(topic.toLowerCase());
+    const id = platform + '_' + profiles[platform] + '_' + encodeURIComponent(topic.toLowerCase());
     await setDoc(doc(records('skills'), id), {platform, username: profiles[platform], topic, count});
   });
   $('#goal-form').onsubmit = event => submit(event, async data => {

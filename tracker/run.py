@@ -13,8 +13,7 @@ def fetch_profiles(profiles):
     results = []
     for platform, handle in profiles.items():
         if platform in MODULES:
-            username(handle)
-            result = safe_fetch(platform, lambda: MODULES[platform].fetch(handle))
+            result = safe_fetch(platform, lambda: MODULES[platform].fetch(username(handle)))
             results.append(dict(result, username=handle))
     return results
 
@@ -64,10 +63,12 @@ def main():
     from .store import database, save, save_sync_status
     from .push import process_notifications
     from .routines import materialize_routines
-    from .account import process_deletion
+    from .account import process_deletion, pending_deletion_roots
     from firebase_admin import firestore
     database(os.environ.get('OWNER_UID', '_initialize'))
     roots = [doc.reference for doc in firestore.client().collection('users').stream()] if args.all else [database()]
+    if args.all:
+        roots = list({root.id: root for root in roots + pending_deletion_roots(firestore.client())}.values())
     failures = 0
     for root in roots:
         try:
@@ -79,11 +80,14 @@ def main():
                 process_notifications(root)
                 continue
             results = fetch_profiles(profile['profiles'])
+            save_failed = False
             for result in results:
                 try:
                     save(root, result, result['fetched_at'][:10])
                 except Exception:
-                    failures += 1
+                    save_failed = True
+            if save_failed:
+                raise RuntimeError('Snapshot write failed; sync is not complete')
             save_sync_status(root, {'lastSyncAt': now(), 'lastSyncRequest': profile.get('syncRequest', '')})
             notify_user(root, results, args.mode)
             process_notifications(root)

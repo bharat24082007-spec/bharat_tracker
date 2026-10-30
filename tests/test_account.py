@@ -8,7 +8,8 @@ class AccountTests(unittest.TestCase):
     def test_requires_explicit_request(self):
         root = MagicMock()
         root.collection.return_value.document.return_value.get.return_value.exists = False
-        with patch('tracker.account.auth.delete_user') as delete:
+        with patch('tracker.account.firestore.client') as client, patch('tracker.account.auth.delete_user') as delete:
+            client.return_value.collection.return_value.document.return_value.get.return_value.to_dict.return_value = {}
             self.assertFalse(process_deletion(root))
             delete.assert_not_called()
 
@@ -42,3 +43,23 @@ class AccountTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 process_deletion(root)
             client.return_value.recursive_delete.assert_not_called()
+
+    # Resume an approved deletion after its request document disappeared in partial cleanup.
+    def test_retry_without_request(self):
+        root = MagicMock(id='requesting-user')
+        root.collection.return_value.document.return_value.get.return_value.exists = False
+        with patch('tracker.account.firestore.client') as client, patch('tracker.account.auth.delete_user') as delete:
+            marker = client.return_value.collection.return_value.document.return_value
+            marker.get.return_value.to_dict.return_value = {'requestedAt': 'earlier'}
+            self.assertTrue(process_deletion(root))
+            delete.assert_called_once_with('requesting-user')
+            client.return_value.recursive_delete.assert_called_once_with(root)
+
+    # A completed security marker alone never authorizes a second deletion.
+    def test_completed_marker_does_not_repeat(self):
+        root = MagicMock()
+        root.collection.return_value.document.return_value.get.return_value.exists = False
+        with patch('tracker.account.firestore.client') as client, patch('tracker.account.auth.delete_user') as delete:
+            client.return_value.collection.return_value.document.return_value.get.return_value.to_dict.return_value = {'requestedAt': 'earlier', 'completedAt': 'done'}
+            self.assertFalse(process_deletion(root))
+            delete.assert_not_called()

@@ -23,9 +23,12 @@ export async function exportWorkspace(db, auth) {
 
 // Require fresh Google verification before queuing irreversible cleanup of this user's account.
 export async function requestAccountDeletion(db, auth, beforeRequest) {
-  if (!auth.currentUser) throw Error('Sign in before requesting deletion.');
-  await reauthenticateWithPopup(auth.currentUser, new GoogleAuthProvider());
-  await getIdToken(auth.currentUser, true);
+  const user = auth.currentUser;
+  if (!user) throw Error('Sign in before requesting deletion.');
+  await reauthenticateWithPopup(user, new GoogleAuthProvider());
+  await getIdToken(user, true);
+  if (auth.currentUser?.uid !== user.uid) throw Error('Account changed; deletion cancelled.');
   await beforeRequest();
-  await setDoc(doc(db, 'users', auth.currentUser.uid, 'accountRequests', 'deletion'), {confirmed: true, requestedAt: serverTimestamp()});
+  if (auth.currentUser?.uid !== user.uid) throw Error('Account changed; deletion cancelled.');
+  await setDoc(doc(db, 'users', user.uid, 'accountRequests', 'deletion'), {confirmed: true, requestedAt: serverTimestamp()});
 }
