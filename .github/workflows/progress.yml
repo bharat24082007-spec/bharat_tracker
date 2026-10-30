@@ -1,0 +1,56 @@
+name: Daily progress
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+    - cron: '0 2 * * *'
+    - cron: '30 15 * * *'
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run mode
+        type: choice
+        options: [snapshot, morning, evening]
+        default: snapshot
+permissions:
+  contents: read
+concurrency:
+  group: progress-tracker
+  cancel-in-progress: false
+jobs:
+  progress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+      OWNER_UID: ${{ secrets.OWNER_UID }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      EVENT_SCHEDULE: ${{ github.event.schedule }}
+      INPUT_MODE: ${{ inputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify tracker logic
+        run: |
+          python -m unittest discover -s tests -p 'test_*.py'
+          npm test
+      - name: Fetch and optionally notify
+        shell: bash
+        run: |
+          mode="snapshot"
+          if [ "$EVENT_SCHEDULE" = '0 2 * * *' ]; then mode="morning"; fi
+          if [ "$EVENT_SCHEDULE" = '30 15 * * *' ]; then mode="evening"; fi
+          if [ -n "$INPUT_MODE" ]; then mode="$INPUT_MODE"; fi
+          if [ "$EVENT_SCHEDULE" = '*/5 * * * *' ]; then
+            python -m tracker.run --all --due-only
+          else
+            python -m tracker.run --all --mode "$mode"
+          fi

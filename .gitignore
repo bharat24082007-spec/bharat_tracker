@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.env
+*service-account*.json
+*firebase-adminsdk*.json
+.firebase/
+.firebase-test.json
+artifacts/
+node_modules/
+*-debug.log
+local-refresh*.log

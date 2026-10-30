@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Every verified Google user can access only their own workspace.
+    function owner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    // Validate each handle independently; the server only fetches fixed provider hosts.
+    function validHandle(profiles, name) {
+      return !(name in profiles) || (profiles[name] is string && profiles[name].matches('^[A-Za-z0-9_-]{1,60}$'));
+    }
+    match /users/{uid} {
+      allow read: if owner(uid);
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly(['profiles', 'syncRequest'])
+        && validProfiles(request.resource.data);
+      allow update: if owner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profiles', 'syncRequest'])
+        && validProfiles(request.resource.data);
+    }
+    // Keep server sync metadata read-only and accept only supported connection fields.
+    function validProfiles(data) {
+      return data.profiles is map
+        && data.profiles.keys().hasOnly(['leetcode', 'codechef', 'gfg', 'hackerrank'])
+        && validHandle(data.profiles, 'leetcode') && validHandle(data.profiles, 'codechef')
+        && validHandle(data.profiles, 'gfg') && validHandle(data.profiles, 'hackerrank')
+        && data.syncRequest is string && data.syncRequest.size() <= 50;
+    }
+    match /users/{uid}/snapshots/{id} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['platform', 'username', 'solved', 'rating', 'status', 'fetched_at', 'day'])
+        && request.resource.data.username == get(/databases/$(database)/documents/users/$(uid)).data.profiles[request.resource.data.platform]
+        && request.resource.data.platform in ['hackerrank', 'gfg']
+        && request.resource.data.status == 'manual'
+        && request.resource.data.solved is int
+        && request.resource.data.solved >= 0 && request.resource.data.solved <= 1000000
+        && request.resource.data.rating == null
+        && request.resource.data.fetched_at is string
+        && request.resource.data.day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && id == request.resource.data.day + '_' + request.resource.data.platform;
+    }
+    match /users/{uid}/todos/{id} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['title', 'due', 'priority', 'done', 'category', 'notes', 'originalDue'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200
+        && request.resource.data.due is string
+        && request.resource.data.priority in ['low', 'medium', 'high']
+        && request.resource.data.done is bool
+        && request.resource.data.get('category', '') is string
+        && request.resource.data.get('category', '').size() <= 60
+        && request.resource.data.get('notes', '') is string
+        && request.resource.data.get('notes', '').size() <= 1000
+        && request.resource.data.get('originalDue', '') is string;
+    }
+    match /users/{uid}/skills/{id} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['platform', 'username', 'topic', 'count'])
+        && request.resource.data.get('username', '') is string
+        && request.resource.data.platform in ['codechef', 'gfg', 'hackerrank']
+        && request.resource.data.topic is string
+        && request.resource.data.topic.size() > 0 && request.resource.data.topic.size() <= 60
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0 && request.resource.data.count <= 1000000;
+    }
+    match /users/{uid}/goals/{id} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['platform', 'username', 'target', 'deadline', 'startDay', 'startSolved'])
+        && request.resource.data.get('username', '') is string
+        && request.resource.data.platform in ['leetcode', 'codechef', 'gfg', 'hackerrank']
+        && request.resource.data.target is int && request.resource.data.target > 0
+        && request.resource.data.startSolved is int && request.resource.data.startSolved >= 0
+        && request.resource.data.deadline is string && request.resource.data.startDay is string;
+    }
+  }
+}

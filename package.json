@@ -1,0 +1,16 @@
+{
+  "name": "student-progress-tracker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "node scripts/fetch-local.cjs",
+    "watch": "node scripts/watch-local.cjs",
+    "test": "node --test tests/metrics.test.js tests/planner.test.js tests/profiles.test.js",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-progress-tracker \"node --test tests/rules.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.10.0",
+    "firebase-tools": "^14.7.0"
+  }
+}
