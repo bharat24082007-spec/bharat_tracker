@@ -29,3 +29,7 @@
 - Background push display depends on browser permission, device/browser support, and OS settings. This audit does not prove delivery on every device.
 - Telegram is optional and its recipient/token secrets remain unconfigured. Browser reminders are the configured notification path.
 - Production account deletion was not executed. The real Authentication API and irreversible cleanup are intentionally covered with mocked Auth plus real emulator storage, rather than deleting the user's account.
+
+## Deployment result
+
+Audit fixes are deployed to Firebase Hosting (`?v=audit4`) and pushed to GitHub. Worker run 41134481263 completed successfully with all four fetchers reporting ok. The signed-in deployed app retained the existing completed Java assignment, showed the new sync timestamp, and produced no browser console errors during the final check. Expected failure messages in the unit-test step come from regression tests that deliberately simulate errors; the actual fetch step succeeded.
