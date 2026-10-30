@@ -62,6 +62,7 @@ def main():
         print(json.dumps(fetch_profiles({args.platform: args.username}), indent=2))
         return
     from .store import database, save
+    from .push import process_notifications
     from firebase_admin import firestore
     database(os.environ.get('OWNER_UID', '_initialize'))
     roots = [doc.reference for doc in firestore.client().collection('users').stream()] if args.all else [database()]
@@ -70,6 +71,7 @@ def main():
         try:
             profile = root.get().to_dict() or {}
             if not profile.get('profiles') or (args.due_only and not needs_sync(profile)):
+                process_notifications(root)
                 continue
             results = fetch_profiles(profile['profiles'])
             for result in results:
@@ -79,6 +81,7 @@ def main():
                     failures += 1
             root.set({'lastSyncAt': now(), 'lastSyncRequest': profile.get('syncRequest', '')}, merge=True)
             notify_user(root, results, args.mode)
+            process_notifications(root)
             print('Synced account: ' + ', '.join(f"{r['platform']}={r['solved']} ({r['status']})" for r in results))
         except Exception as error:
             failures += 1

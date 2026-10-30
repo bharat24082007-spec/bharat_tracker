@@ -106,6 +106,20 @@ LeetCode may block GitHub-hosted IPs. If the same fetch works locally, use the l
 
 ## 6. Optional Telegram
 
+### Built-in web push (recommended)
+
+Momentum is now an installable PWA. In the signed-in dashboard, expand **App & reminders**, click **Enable on this device**, and allow the browser prompt. Use **Send a test** to queue a device-specific test. The scheduled worker processes requests; GitHub schedules can be delayed. The app displays the delivery status. A successful FCM send means the push service accepted it; it cannot guarantee the OS displayed it.
+
+Install using the app's Install button when available or your browser's install menu. On iPhone/iPad, use Safari → Share → Add to Home Screen, open the installed app, and then enable notifications. Unsupported embedded browsers show guidance instead of asking repeatedly. Each device opts in separately. Disabling a device or signing out unregisters it; stale session pushes are also suppressed by the service worker. Notification bodies contain counts, not private task titles.
+
+Morning plans send between 07:30 and noon IST when due/missed tasks exist. Evening reminders send between 21:00 and midnight IST for unfinished tasks and/or a proven zero-solve day across connected profiles. Missing, unavailable, or negative-correction observations suppress streak warnings. Preferences apply to the user's devices. Server delivery records provide leases and bounded retries to avoid repeated scheduled sends. Expired FCM tokens are removed. Push tests have a one-minute per-user cooldown.
+
+The public VAPID certificate is in `public/config.js`; its private key stays with Firebase. `node scripts/setup-push.cjs` enables FCM/registration/installation APIs and grants the existing `progress-runner` service account Firebase Cloud Messaging API Admin (`roles/firebasecloudmessaging.admin`) alongside its Firestore role. No additional private key or GitHub secret is needed. Firestore rules isolate device tokens and preferences by UID; browser clients cannot write delivery receipts or message content.
+
+The service worker caches only an offline page and public icons, not personal data. The app needs a network connection to read/write its workspace and receive reminders. Email summaries remain a later optional feature.
+
+### Legacy owner-only Telegram (optional)
+
 ```powershell
 $env:TELEGRAM_BOT_TOKEN = 'your-token'
 python get_chat_id.py

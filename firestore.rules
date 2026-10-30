@@ -29,6 +29,31 @@ service cloud.firestore {
         && validHandle(data.profiles, 'gfg') && validHandle(data.profiles, 'hackerrank')
         && data.syncRequest is string && data.syncRequest.size() <= 50;
     }
+    match /users/{uid}/devices/{id} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && id.matches('^[a-f0-9]{64}$')
+        && request.resource.data.keys().hasOnly(['token', 'updatedAt'])
+        && request.resource.data.token is string
+        && request.resource.data.token.size() >= 20 && request.resource.data.token.size() <= 4096
+        && request.resource.data.updatedAt is string && request.resource.data.updatedAt.size() <= 50;
+    }
+    match /users/{uid}/settings/notifications {
+      allow read: if owner(uid);
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly(['tasks', 'streak', 'testRequest', 'testDeviceId'])
+        && validNotifications(request.resource.data);
+      allow update: if owner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tasks', 'streak', 'testRequest', 'testDeviceId'])
+        && validNotifications(request.resource.data);
+    }
+    // Clients control only preferences and a test request, never sender state or message content.
+    function validNotifications(data) {
+      return data.get('tasks', true) is bool && data.get('streak', true) is bool
+        && data.get('testRequest', '') is string && data.get('testRequest', '').size() <= 50
+        && data.get('testDeviceId', '') is string
+        && (data.get('testDeviceId', '') == '' || data.testDeviceId.matches('^[a-f0-9]{64}$'));
+    }
     match /users/{uid}/snapshots/{id} {
       allow read: if owner(uid);
       allow create, update: if owner(uid)

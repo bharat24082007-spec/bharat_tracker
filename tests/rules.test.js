@@ -46,5 +46,18 @@ test('verified Google users have isolated workspaces', async () => {
     await assertSucceeds(setDoc(doc(owner, 'users/owner-test/snapshots/2026-10-28_gfg'), snapshot));
     await assertFails(setDoc(doc(owner, 'users/owner-test/snapshots/wrong-id'), snapshot));
     await assertFails(setDoc(doc(owner, 'users/owner-test/snapshots/2026-10-28_leetcode'), {...snapshot, platform: 'leetcode'}));
+    const devicePath = 'users/owner-test/devices/' + 'a'.repeat(64);
+    const device = {token: 'test-device-token-123456789', updatedAt: new Date().toISOString()};
+    await assertSucceeds(setDoc(doc(owner, devicePath), device));
+    await assertFails(getDoc(doc(stranger, devicePath)));
+    await assertFails(setDoc(doc(stranger, devicePath), device));
+    await assertFails(setDoc(doc(owner, devicePath), {...device, token: 'short'}));
+    const preferences = 'users/owner-test/settings/notifications';
+    await assertSucceeds(setDoc(doc(owner, preferences), {tasks: true, streak: false, testRequest: 'now', testDeviceId: 'a'.repeat(64)}));
+    await assertFails(setDoc(doc(owner, preferences), {tasks: true, lastTestAt: 'fake'}));
+    await assertFails(setDoc(doc(owner, preferences), {tasks: 'yes'}));
+    await assertFails(getDoc(doc(stranger, preferences)));
+    await assertFails(setDoc(doc(owner, 'users/owner-test/notificationDeliveries/fake'), {state: 'sent'}));
+    await assertSucceeds(deleteDoc(doc(owner, devicePath)));
   } finally { await env.cleanup(); }
 });

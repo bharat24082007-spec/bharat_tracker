@@ -5,6 +5,7 @@ import {firebaseConfig} from './config.js';
 import {profileUsername, profileUrl} from './profiles.js';
 import {platforms, today, shift, delta, streak, goalProgress} from './metrics.js';
 import {taskStatus, selectTasks, reschedule} from './planner.js';
+import {initializeNotifications} from './notifications.js';
 
 const names = {leetcode: 'LeetCode', codechef: 'CodeChef', gfg: 'GeeksforGeeks', hackerrank: 'HackerRank'};
 let db, auth, rows = [], allRows = [], todos = [], goals = [], skills = [], subscriptions = [], taskFilter = 'today', ownerUid = null, profiles = {}, account = {}, generation = 0;
@@ -213,9 +214,12 @@ function session(user) {
   ownerUid = user?.uid || null;
   const version = ++generation;
   const allowed = user && user.emailVerified;
+  if (!allowed) $('#account-name').textContent = 'A little more deliberate.';
   $('#login').hidden = allowed; $('#dashboard').hidden = !allowed; $('#logout').hidden = !user;
   $('#identity').textContent = user && !allowed ? 'Use a verified Google account to continue.' : '';
   if (!allowed) return;
+  const initialView = new URLSearchParams(location.search).get('view');
+  if (['platforms', 'planner', 'skills', 'connections'].includes(initialView)) showView(initialView);
   $('#account-name').textContent = user.displayName || user.email || 'Your workspace';
   $('#message').textContent = '';
   subscriptions.push(onSnapshot(doc(db, 'users', ownerUid), snapshot => {
@@ -263,8 +267,9 @@ function start() {
     return;
   }
   const app = initializeApp(firebaseConfig); db = getFirestore(app); auth = getAuth(app);
+  const notifications = initializeNotifications(app, auth, db);
   $('#signin').onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(report);
-  $('#logout').onclick = () => signOut(auth).catch(report);
+  $('#logout').onclick = async () => { try { await notifications.beforeSignOut(); await signOut(auth); } catch (error) { report(error); } };
   onAuthStateChanged(auth, session);
   $('#chart-platform').onchange = renderChart;
   $('#topic-platform').onchange = renderTopics;

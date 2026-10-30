@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#192e29"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="icon" type="image/png" href="icons/icon-192.png">
   <title>Momentum · Student progress</title><link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,6 +14,7 @@
       <section class="intro"><div><p class="eyebrow" id="date"></p><h1>Your progress, in perspective.</h1><p>Everything you're working on. Room for what comes next.</p></div><div class="sync-controls"><button id="sync" class="primary">↻ Sync profiles</button><span class="pill">Asia/Kolkata · IST</span></div></section>
       <nav class="workspace-nav" aria-label="Workspace"><button data-view="platforms" aria-pressed="true">Overview</button><button data-view="planner" aria-pressed="false">Planner</button><button data-view="skills" aria-pressed="false">Skills & goals</button><button data-view="connections" aria-pressed="false">Connections</button><span id="connection-count"></span></nav>
       <p id="sync-status" class="muted" role="status"></p>
+      <details class="panel notification-panel"><summary>App & reminders <span id="push-status">Checking this browser…</span></summary><div class="notification-layout"><div><h2>Make room for a reminder.</h2><p class="muted">Morning task plans and missed work. Evening unfinished tasks and streak warnings. All times in IST; delivery follows the scheduled worker.</p><div class="row"><button id="install-app" hidden>Install Momentum</button><button id="push-enable" class="primary">Enable on this device</button><button id="push-test" disabled>Send a test</button><button id="push-disable" disabled>Disable on this device</button></div><p id="push-help" class="muted" role="status">On iPhone or iPad, use Safari → Share → Add to Home Screen, open the installed app, then enable reminders. On other supported browsers, use the Install button or the browser's install menu.</p><p id="push-received" role="status" aria-live="polite"></p></div><form id="push-preferences"><label class="check-label"><input id="push-tasks" type="checkbox" checked> Task plans & missed-task reminders</label><label class="check-label"><input id="push-streak" type="checkbox" checked> Evening streak-at-risk reminders</label><button>Save reminder preferences</button><p class="muted">Preferences apply to your devices. Disabling a device leaves your other devices unchanged.</p></form></div></details>
       <div id="planner-alert" class="notice" hidden></div>
       <div id="view-platforms">
       <div class="section-caption"><span>YOUR CODING ACCOUNTS</span><span>Unique problems · daily snapshots</span></div>

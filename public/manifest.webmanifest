@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Momentum — Student workspace",
+  "short_name": "Momentum",
+  "description": "Your coding progress, study plan, and next milestone.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f4ef",
+  "theme_color": "#192e29",
+  "icons": [
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
