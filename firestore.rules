@@ -2,11 +2,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // Every verified Google user can access only their own workspace.
-    function owner(uid) {
+    function signedOwner(uid) {
       return request.auth != null
         && request.auth.uid == uid
         && request.auth.token.email_verified == true
         && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    // Lock a workspace as soon as deletion is requested, including while old tokens remain valid.
+    function owner(uid) {
+      return signedOwner(uid)
+        && !exists(/databases/$(database)/documents/users/$(uid)/accountRequests/deletion)
+        && !exists(/databases/$(database)/documents/accountDeletions/$(uid));
+    }
+    match /users/{uid}/accountRequests/deletion {
+      allow read: if signedOwner(uid);
+      allow create: if signedOwner(uid)
+        && request.auth.token.auth_time >= request.time.toMillis() / 1000 - 300
+        && request.resource.data.keys().hasOnly(['confirmed', 'requestedAt'])
+        && request.resource.data.confirmed == true
+        && request.resource.data.requestedAt == request.time;
     }
     // Validate each handle independently; the server only fetches fixed provider hosts.
     function validHandle(profiles, name) {
@@ -41,15 +55,20 @@ service cloud.firestore {
     match /users/{uid}/settings/notifications {
       allow read: if owner(uid);
       allow create: if owner(uid)
-        && request.resource.data.keys().hasOnly(['tasks', 'streak', 'testRequest', 'testDeviceId'])
+        && request.resource.data.keys().hasOnly(['tasks', 'streak', 'testRequest', 'testDeviceId', 'morningTime', 'eveningTime'])
         && validNotifications(request.resource.data);
       allow update: if owner(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tasks', 'streak', 'testRequest', 'testDeviceId'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tasks', 'streak', 'testRequest', 'testDeviceId', 'morningTime', 'eveningTime'])
         && validNotifications(request.resource.data);
     }
     // Clients control only preferences and a test request, never sender state or message content.
     function validNotifications(data) {
       return data.get('tasks', true) is bool && data.get('streak', true) is bool
+        && data.get('morningTime', '07:30') is string
+        && data.get('eveningTime', '21:00') is string
+        && data.get('morningTime', '07:30').matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+        && data.get('eveningTime', '21:00').matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+        && data.get('morningTime', '07:30') < data.get('eveningTime', '21:00')
         && data.get('testRequest', '') is string && data.get('testRequest', '').size() <= 50
         && data.get('testDeviceId', '') is string
         && (data.get('testDeviceId', '') == '' || data.testDeviceId.matches('^[a-f0-9]{64}$'));
@@ -71,7 +90,7 @@ service cloud.firestore {
     match /users/{uid}/todos/{id} {
       allow read, delete: if owner(uid);
       allow create, update: if owner(uid)
-        && request.resource.data.keys().hasOnly(['title', 'due', 'priority', 'done', 'category', 'notes', 'originalDue'])
+        && request.resource.data.keys().hasOnly(['title', 'due', 'priority', 'done', 'category', 'notes', 'originalDue', 'createdAt', 'completedAt', 'seriesId'])
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200
         && request.resource.data.due is string
@@ -81,7 +100,26 @@ service cloud.firestore {
         && request.resource.data.get('category', '').size() <= 60
         && request.resource.data.get('notes', '') is string
         && request.resource.data.get('notes', '').size() <= 1000
-        && request.resource.data.get('originalDue', '') is string;
+        && request.resource.data.get('originalDue', '') is string
+        && request.resource.data.get('createdAt', '') is string
+        && request.resource.data.get('completedAt', '') is string
+        && request.resource.data.get('seriesId', '') is string && request.resource.data.get('seriesId', '').size() <= 100;
+    }
+    match /users/{uid}/routines/{id} {
+      allow read: if owner(uid);
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly(['title', 'priority', 'category', 'notes', 'frequency', 'startDay', 'generatedThrough', 'enabled'])
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200
+        && request.resource.data.priority in ['low', 'medium', 'high']
+        && request.resource.data.category is string && request.resource.data.category.size() <= 60
+        && request.resource.data.notes is string && request.resource.data.notes.size() <= 1000
+        && request.resource.data.frequency in ['daily', 'weekly']
+        && request.resource.data.startDay is string && request.resource.data.startDay.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.generatedThrough == request.resource.data.startDay
+        && request.resource.data.enabled == true;
+      allow update: if owner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enabled'])
+        && request.resource.data.enabled is bool;
     }
     match /users/{uid}/skills/{id} {
       allow read, delete: if owner(uid);

@@ -1,14 +1,16 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore, collection, doc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore, collection, doc, getDoc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, runTransaction, writeBatch} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './config.js?v=push1';
 import {profileUsername, profileUrl} from './profiles.js';
 import {platforms, today, shift, delta, streak, goalProgress} from './metrics.js';
 import {taskStatus, selectTasks, reschedule} from './planner.js';
 import {initializeNotifications} from './notifications.js';
+import {weeklyReview} from './review.js';
+import {exportWorkspace, requestAccountDeletion} from './account.js';
 
 const names = {leetcode: 'LeetCode', codechef: 'CodeChef', gfg: 'GeeksforGeeks', hackerrank: 'HackerRank'};
-let db, auth, rows = [], allRows = [], todos = [], goals = [], skills = [], subscriptions = [], taskFilter = 'today', ownerUid = null, profiles = {}, account = {}, generation = 0;
+let db, auth, rows = [], allRows = [], todos = [], goals = [], skills = [], routines = [], subscriptions = [], taskFilter = 'today', ownerUid = null, profiles = {}, account = {}, generation = 0;
 // Select one dashboard element by its CSS selector.
 const $ = selector => document.querySelector(selector);
 
@@ -66,6 +68,12 @@ function renderCards() {
     card.append(explore);
     const link = element('a', '@' + profiles[platform], 'profile-link');
     link.href = profileUrl(platform, profiles[platform]); link.target = '_blank'; link.rel = 'noopener noreferrer'; card.append(link);
+    const health = element('details', '', 'connection-health'), title = element('summary', 'Connection health');
+    const descriptions = {HTTPError: 'The provider rejected the request or is temporarily blocking access.', URLError: 'The provider could not be reached.', TimeoutError: 'The provider took too long to respond.', ValueError: 'The public profile could not be read. Check the username; the provider may have changed its response.'};
+    health.append(title, element('p', status === 'unavailable' ? descriptions[current?.error] || 'The last fetch failed. Your last known count is preserved.' : !value ? 'Waiting for the first server fetch.' : 'The latest saved profile snapshot is available.', 'muted'));
+    if (current?.last_attempt_at || current?.fetched_at) health.append(element('p', 'Last attempt: ' + new Date(current.last_attempt_at || current.fetched_at).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' IST', 'muted'));
+    const retry = element('button', 'Request another sync'); retry.disabled = Boolean(account.syncRequest && account.syncRequest !== account.lastSyncRequest);
+    retry.onclick = () => requestSync().catch(report); health.append(retry); card.append(health);
     $('#cards').append(card);
   }
 }
@@ -128,7 +136,7 @@ function renderTopics() {
 
 // Change the active workspace without navigating away from the signed-in session.
 function showView(view) {
-  for (const name of ['platforms', 'planner', 'skills', 'connections']) {
+  for (const name of ['platforms', 'planner', 'review', 'skills', 'connections']) {
     $(`#view-${name}`).hidden = name !== view;
     $(`[data-view="${name}"]`).setAttribute('aria-pressed', String(name === view));
   }
@@ -161,7 +169,7 @@ function renderTodos() {
   for (const task of visible) {
     const item = element('div', '', 'item'), body = element('div', task.title, 'body' + (task.done ? ' done' : ''));
     const check = element('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `Complete ${task.title}`);
-    check.onchange = () => changeTask(task, {done: check.checked}, check);
+    check.onchange = () => changeTask(task, {done: check.checked, completedAt: check.checked ? new Date().toISOString() : ''}, check);
     const remove = element('button', 'Delete'); remove.onclick = () => deleteDoc(doc(records('todos'), task.id)).catch(report);
     const status = taskStatus(task, day);
     body.append(element('small', `${task.category || 'General'} · ${task.priority} priority · ${task.due || 'No date'} · ${status}`));
@@ -169,6 +177,13 @@ function renderTodos() {
     if (task.notes) body.append(element('p', task.notes, 'task-notes'));
     if (task.originalDue && task.originalDue !== task.due) body.append(element('small', `Originally due ${task.originalDue}`));
     const actions = element('div', '', 'task-actions');
+    const routine = routines.find(routine => routine.id === task.seriesId);
+    if (routine) {
+      body.append(element('small', routine.enabled ? `Repeats ${routine.frequency}` : 'Repeating schedule stopped'));
+      if (routine.enabled) {
+        const stop = element('button', 'Stop repeating'); stop.onclick = () => updateDoc(doc(records('routines'), routine.id), {enabled: false}).catch(report); actions.append(stop);
+      }
+    }
     if (!task.done) {
       const tomorrow = element('button', 'Move to tomorrow');
       tomorrow.onclick = () => changeTask(task, reschedule(task, shift(today(), 1)), tomorrow);
@@ -180,6 +195,34 @@ function renderTodos() {
     actions.append(remove); body.append(actions);
     item.append(check, body); $('#todos').append(item);
   }
+}
+
+// Queue a user's refresh request without allowing changes to server-owned sync metadata.
+async function requestSync() {
+  $('#sync').disabled = true;
+  try { await setDoc(doc(db, 'users', ownerUid), {syncRequest: new Date().toISOString()}, {merge: true}); }
+  catch (error) { $('#sync').disabled = false; throw error; }
+}
+
+// Render a factual weekly review using the current account's measured history.
+function renderReview() {
+  const review = weeklyReview(rows, todos, $('#review-date').value || today(), today(), profiles);
+  $('#review-range').textContent = `${review.start} — ${review.end} · IST`;
+  $('#review-stats').replaceChildren();
+  for (const [label, value] of [['Known new solves', review.solved], ['Tasks completed', review.completed.length], ['Unfinished deadlines', review.missed.length]]) {
+    const item = element('article', '', 'card'); item.append(element('div', label, 'heading'), element('strong', value)); $('#review-stats').append(item);
+  }
+  $('#review-platforms').replaceChildren();
+  for (const [platform, count] of Object.entries(review.counts)) {
+    const item = element('div', '', 'item'); item.append(element('span', names[platform], 'body'), element('span', `${count.solved} solved · ${count.measured}/${count.days} daily changes measured`, 'muted')); $('#review-platforms').append(item);
+  }
+  if (!Object.keys(review.counts).length) $('#review-platforms').append(element('p', 'Connect a profile to include coding progress.', 'muted'));
+  $('#review-topics').replaceChildren();
+  if (!review.topics?.length) $('#review-topics').append(element('p', review.topics ? 'No measured topic increases this week.' : 'A topic baseline is not available for this week yet.', 'muted'));
+  for (const [name, count] of (review.topics || []).slice(0, 12)) $('#review-topics').append(element('div', `${name} · +${count}`, 'topic'));
+  $('#review-tasks').replaceChildren();
+  for (const task of review.completed) $('#review-tasks').append(element('div', task.title, 'item'));
+  if (!review.completed.length) $('#review-tasks').append(element('p', 'No timestamped completions in this week yet.', 'muted'));
 }
 
 // Show target pace from a saved baseline, deadline, and latest observed count.
@@ -205,12 +248,12 @@ function render() {
   const pending = account.syncRequest && account.syncRequest !== account.lastSyncRequest;
   $('#sync-status').textContent = pending ? 'Refresh queued. Keep working; your cards update when the worker finishes.' : account.lastSyncAt ? `Last sync ${new Date(account.lastSyncAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST` : 'Connect a public profile to start your history.';
   $('#sync').disabled = !Object.keys(profiles).length || Boolean(pending);
-  renderCards(); renderChart(); renderTopics(); renderTodos(); renderGoals();
+  renderCards(); renderChart(); renderTopics(); renderTodos(); renderGoals(); renderReview();
 }
 
 // Subscribe only to the verified user's own private workspace.
-function session(user) {
-  subscriptions.forEach(stop => stop()); subscriptions = []; rows = []; allRows = []; todos = []; goals = []; skills = []; profiles = {}; account = {};
+async function session(user) {
+  subscriptions.forEach(stop => stop()); subscriptions = []; rows = []; allRows = []; todos = []; goals = []; skills = []; routines = []; profiles = {}; account = {};
   ownerUid = user?.uid || null;
   const version = ++generation;
   const allowed = user && user.emailVerified;
@@ -218,8 +261,17 @@ function session(user) {
   $('#login').hidden = allowed; $('#dashboard').hidden = !allowed; $('#logout').hidden = !user;
   $('#identity').textContent = user && !allowed ? 'Use a verified Google account to continue.' : '';
   if (!allowed) return;
+  try {
+    const deletion = await getDoc(doc(db, 'users', ownerUid, 'accountRequests', 'deletion'));
+    if (deletion.exists()) { await signOut(auth); $('#message').textContent = 'Your account deletion is queued. Workspace access is disabled while the worker removes it.'; return; }
+    await runTransaction(db, async transaction => {
+      const root = doc(db, 'users', user.uid), existing = await transaction.get(root);
+      if (!existing.exists()) transaction.set(root, {profiles: {}, syncRequest: ''});
+    });
+  } catch (error) { report(error); return; }
+  if (generation !== version) return;
   const initialView = new URLSearchParams(location.search).get('view');
-  if (['platforms', 'planner', 'skills', 'connections'].includes(initialView)) showView(initialView);
+  if (['platforms', 'planner', 'review', 'skills', 'connections'].includes(initialView)) showView(initialView);
   $('#account-name').textContent = user.displayName || user.email || 'Your workspace';
   $('#message').textContent = '';
   subscriptions.push(onSnapshot(doc(db, 'users', ownerUid), snapshot => {
@@ -231,7 +283,7 @@ function session(user) {
     if (!Object.keys(profiles).length) showView('connections');
     render();
   }, report));
-  for (const name of ['snapshots', 'todos', 'goals', 'skills']) {
+  for (const name of ['snapshots', 'todos', 'goals', 'skills', 'routines']) {
     subscriptions.push(onSnapshot(records(name), snapshot => {
       if (generation !== version) return;
       const values = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}));
@@ -239,6 +291,7 @@ function session(user) {
       if (name === 'todos') todos = values;
       if (name === 'goals') goals = values;
       if (name === 'skills') skills = values;
+      if (name === 'routines') routines = values;
       render();
     }, report));
   }
@@ -274,10 +327,25 @@ function start() {
   $('#chart-platform').onchange = renderChart;
   $('#topic-platform').onchange = renderTopics;
   $('#topic-search').oninput = renderTopics;
-  $('#sync').onclick = async () => {
-    $('#sync').disabled = true;
-    try { await setDoc(doc(db, 'users', ownerUid), {syncRequest: new Date().toISOString()}, {merge: true}); }
-    catch (error) { report(error); $('#sync').disabled = false; }
+  $('#sync').onclick = () => requestSync().catch(report);
+  $('#review-date').value = today(); $('#review-date').onchange = renderReview;
+  $('#export-data').onclick = async () => {
+    $('#export-data').disabled = true;
+    try { await exportWorkspace(db, auth); $('#account-status').textContent = 'Export downloaded. Keep this file private.'; }
+    catch (error) { report(error); } finally { $('#export-data').disabled = false; }
+  };
+  $('#delete-account').onclick = () => { $('#delete-text').value = ''; $('#delete-confirm').disabled = true; $('#delete-dialog').showModal(); };
+  $('#delete-cancel').onclick = () => $('#delete-dialog').close();
+  $('#delete-text').oninput = () => { $('#delete-confirm').disabled = $('#delete-text').value !== 'DELETE'; };
+  $('#delete-form').onsubmit = async event => {
+    event.preventDefault(); if ($('#delete-text').value !== 'DELETE') return;
+    $('#delete-confirm').disabled = true;
+    try {
+      await requestAccountDeletion(db, auth, notifications.beforeSignOut);
+      subscriptions.forEach(stop => stop()); subscriptions = [];
+      $('#delete-dialog').close(); await signOut(auth);
+      $('#message').textContent = 'Deletion queued. Your workspace is locked while the worker removes your records and Firebase login.';
+    } catch (error) { report(error); $('#delete-confirm').disabled = false; }
   };
   $('#connections-form').onsubmit = event => submit(event, async data => {
     const links = {};
@@ -300,7 +368,15 @@ function start() {
   });
   $('#todo-form').onsubmit = event => submit(event, async data => {
     const title = data.get('title').trim(); if (!title) throw Error('Enter a task name.');
-    await addDoc(records('todos'), {title, due: data.get('due'), priority: data.get('priority'), category: data.get('category'), notes: data.get('notes').trim(), done: false});
+    const fields = {title, due: data.get('due'), priority: data.get('priority'), category: data.get('category'), notes: data.get('notes').trim(), done: false, createdAt: new Date().toISOString()};
+    const frequency = data.get('frequency');
+    if (frequency === 'none') await addDoc(records('todos'), fields);
+    else {
+      const routine = doc(records('routines')), batch = writeBatch(db);
+      batch.set(routine, {title, priority: fields.priority, category: fields.category, notes: fields.notes, frequency, startDay: fields.due, generatedThrough: fields.due, enabled: true});
+      batch.set(doc(records('todos'), routine.id + '_' + fields.due), {...fields, seriesId: routine.id});
+      await batch.commit();
+    }
   });
   $('#skill-form').onsubmit = event => submit(event, async data => {
     const platform = data.get('platform'), topic = data.get('topic').trim(), count = Number(data.get('count'));

@@ -61,14 +61,19 @@ def main():
             parser.error('--dry-run requires --platform and --username')
         print(json.dumps(fetch_profiles({args.platform: args.username}), indent=2))
         return
-    from .store import database, save
+    from .store import database, save, save_sync_status
     from .push import process_notifications
+    from .routines import materialize_routines
+    from .account import process_deletion
     from firebase_admin import firestore
     database(os.environ.get('OWNER_UID', '_initialize'))
     roots = [doc.reference for doc in firestore.client().collection('users').stream()] if args.all else [database()]
     failures = 0
     for root in roots:
         try:
+            if process_deletion(root):
+                continue
+            materialize_routines(root)
             profile = root.get().to_dict() or {}
             if not profile.get('profiles') or (args.due_only and not needs_sync(profile)):
                 process_notifications(root)
@@ -79,7 +84,7 @@ def main():
                     save(root, result, result['fetched_at'][:10])
                 except Exception:
                     failures += 1
-            root.set({'lastSyncAt': now(), 'lastSyncRequest': profile.get('syncRequest', '')}, merge=True)
+            save_sync_status(root, {'lastSyncAt': now(), 'lastSyncRequest': profile.get('syncRequest', '')})
             notify_user(root, results, args.mode)
             process_notifications(root)
             print('Synced account: ' + ', '.join(f"{r['platform']}={r['solved']} ({r['status']})" for r in results))

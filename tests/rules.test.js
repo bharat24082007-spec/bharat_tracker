@@ -1,7 +1,9 @@
-import {readFileSync} from 'node:fs';
+import {readFileSync, existsSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {initializeTestEnvironment, assertFails, assertSucceeds} from '@firebase/rules-unit-testing';
-import {doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs} from 'firebase/firestore';
+import {doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, serverTimestamp} from 'firebase/firestore';
 
 // Exercise real rules with owner, stranger, anonymous, and non-Google contexts.
 test('verified Google users have isolated workspaces', async () => {
@@ -59,5 +61,32 @@ test('verified Google users have isolated workspaces', async () => {
     await assertFails(getDoc(doc(stranger, preferences)));
     await assertFails(setDoc(doc(owner, 'users/owner-test/notificationDeliveries/fake'), {state: 'sent'}));
     await assertSucceeds(deleteDoc(doc(owner, devicePath)));
+    await assertSucceeds(updateDoc(doc(owner, preferences), {morningTime: '09:00', eveningTime: '19:00'}));
+    await assertFails(updateDoc(doc(owner, preferences), {morningTime: '24:30'}));
+    await assertFails(updateDoc(doc(owner, preferences), {morningTime: '22:00', eveningTime: '10:00'}));
+    const routinePath = 'users/owner-test/routines/practice';
+    const routine = {title: 'Practice', priority: 'high', category: 'DSA', notes: '', frequency: 'daily', startDay: '2026-10-31', generatedThrough: '2026-10-31', enabled: true};
+    await assertSucceeds(setDoc(doc(owner, routinePath), routine));
+    await assertSucceeds(updateDoc(doc(owner, routinePath), {enabled: false}));
+    await assertFails(updateDoc(doc(owner, routinePath), {generatedThrough: '2027-01-01'}));
+    await assertFails(getDoc(doc(stranger, routinePath)));
+    const recent = env.authenticatedContext('delete-user', {...claims, auth_time: Math.floor(Date.now() / 1000)}).firestore();
+    const stale = env.authenticatedContext('stale-user', {...claims, auth_time: 1}).firestore();
+    const request = {confirmed: true, requestedAt: serverTimestamp()};
+    await assertSucceeds(setDoc(doc(recent, 'users/delete-user'), {profiles: {}, syncRequest: ''}));
+    await assertFails(setDoc(doc(stale, 'users/stale-user/accountRequests/deletion'), request));
+    await assertFails(setDoc(doc(stranger, 'users/delete-user/accountRequests/deletion'), request));
+    await assertSucceeds(setDoc(doc(recent, 'users/delete-user/accountRequests/deletion'), request));
+    await assertFails(getDoc(doc(recent, 'users/delete-user')));
+    await assertFails(setDoc(doc(recent, 'users/delete-user/todos/new'), task));
+    await assertFails(deleteDoc(doc(recent, 'users/delete-user/accountRequests/deletion')));
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'accountDeletions/deleted-user'), {completedAt: 'test'});
+    });
+    const deleted = env.authenticatedContext('deleted-user', claims).firestore();
+    await assertFails(setDoc(doc(deleted, 'users/deleted-user'), {profiles: {}, syncRequest: ''}));
+    const localPython = process.platform === 'win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python';
+    const cleanup = spawnSync(existsSync(localPython) ? localPython : 'python', ['-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_account_emulator.py', '-v'], {encoding: 'utf8', env: process.env, timeout: 90000});
+    assert.equal(cleanup.status, 0, cleanup.stdout + cleanup.stderr);
   } finally { await env.cleanup(); }
 });

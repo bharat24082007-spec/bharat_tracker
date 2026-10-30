@@ -8,5 +8,7 @@ app = app.replace("'./notifications.js'", "'./ui-notifications.js'");
 fs.writeFileSync(path.join(directory, 'ui-notifications.js'), "// Disable real push subscriptions in the isolated sample-data fixture.\nexport function initializeNotifications() { document.querySelector('#push-status').textContent = 'Disabled in UI fixture'; return {beforeSignOut: async () => {}}; }\n");
 fs.writeFileSync(path.join(directory, 'app.js'), app);
 fs.copyFileSync('tests/ui-firebase.js', path.join(directory, 'ui-firebase.js'));
+let account = fs.readFileSync('public/account.js', 'utf8').replace(/https:\/\/www\.gstatic\.com\/firebasejs\/[^']+/g, './ui-firebase.js');
+fs.writeFileSync(path.join(directory, 'account.js'), account);
 fs.writeFileSync(path.join(directory, 'index.html'), fs.readFileSync('public/index.html', 'utf8').replace('<title>Momentum · Student progress</title>', '<title>UI TEST — Momentum</title>').replace('STUDENT WORKSPACE</span>', 'UI TEST · SAMPLE DATA</span>'));
 console.log('Isolated UI fixture built in artifacts/ui. Never deploy this folder.');

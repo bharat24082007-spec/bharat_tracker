@@ -31,6 +31,15 @@ class PushTests(unittest.TestCase):
         self.assertNotIn('Private task title', result[0]['body'])
         self.assertEqual(reminder_plan({}, [], tasks, {'tasks': False, 'streak': False}, '2026-10-31T21:00:00+05:30'), [])
 
+    # Respect custom times and expire late reminders instead of delivering them during another period.
+    def test_custom_times(self):
+        prefs = {'morningTime': '09:00', 'eveningTime': '19:30'}
+        tasks = [{'due': '2026-10-31', 'done': False}]
+        self.assertEqual(reminder_plan({}, [], tasks, prefs, '2026-10-31T08:00:00+05:30'), [])
+        self.assertEqual(len(reminder_plan({}, [], tasks, prefs, '2026-10-31T09:00:00+05:30')), 1)
+        self.assertEqual(len(reminder_plan({}, [], tasks, prefs, '2026-10-31T19:30:00+05:30')), 1)
+        self.assertEqual(reminder_plan({}, [], tasks, prefs, '2026-10-31T22:00:00+05:30'), [])
+
     # Prevent overlapping or repeated claims but allow bounded retries after an abandoned attempt.
     def test_delivery_lease(self):
         ref = MagicMock()

@@ -13,6 +13,11 @@ Deployment checked October 31, 2026: 14 Python tests, 7 JavaScript tests, and th
 3. **Sync profiles** queues a refresh. A running background worker processes it; the page listens for saved results.
 4. Use **Planner** for Today, Tomorrow, missed work, categories, notes, priorities, completion, and rescheduling. Forwarding preserves the original deadline.
 5. Use **Skills & goals** for automatic LeetCode topic counts, manual topic totals for other platforms, targets, deadlines, and required daily pace.
+6. Open **Weekly review** to see measured solves, timestamped task completions, unfinished deadlines, and LeetCode topic changes. Select any date to review its Monday–Sunday week.
+
+In Planner, choose **Repeat → Every day / Every week** to create a recurring schedule. The first occurrence is saved immediately; the worker generates entries through tomorrow, with catch-up bounded to 32 calendar days per run. Existing completed, moved, or deleted occurrences are not recreated. **Stop repeating** prevents further generation and keeps already created entries, which can be deleted individually. Completion timestamps are stored in UTC and attributed to calendar days in IST. Older completions without timestamps are not invented in weekly reports.
+
+Each connected card has **Connection health**, including last attempt, a readable failure reason, and a retry request. A retry waits for the worker and the normal cooldown.
 
 Supported profiles: LeetCode, CodeChef, GeeksforGeeks, HackerRank. Only supported hosts and simple usernames are accepted. The backend builds fixed provider URLs; it never fetches a user-supplied arbitrary URL. This links a public profile for tracking, not proof of ownership of that external account.
 
@@ -112,7 +117,7 @@ Momentum is now an installable PWA. In the signed-in dashboard, expand **App & r
 
 Install using the app's Install button when available or your browser's install menu. On iPhone/iPad, use Safari → Share → Add to Home Screen, open the installed app, and then enable notifications. Unsupported embedded browsers show guidance instead of asking repeatedly. Each device opts in separately. Disabling a device or signing out unregisters it; stale session pushes are also suppressed by the service worker. Notification bodies contain counts, not private task titles.
 
-Morning plans send between 07:30 and noon IST when due/missed tasks exist. Evening reminders send between 21:00 and midnight IST for unfinished tasks and/or a proven zero-solve day across connected profiles. Missing, unavailable, or negative-correction observations suppress streak warnings. Preferences apply to the user's devices. Server delivery records provide leases and bounded retries to avoid repeated scheduled sends. Expired FCM tokens are removed. Push tests have a one-minute per-user cooldown.
+Morning and evening reminder times are configurable per user in App & reminders (defaults 07:30 and 21:00 IST). Each delivery window lasts at most two hours, capped at the next window or midnight. Reminders cover due/missed tasks and a proven zero-solve day across connected profiles. Missing, unavailable, or negative-correction observations suppress streak warnings. Preferences apply to the user's devices. Server delivery records provide leases and bounded retries to avoid repeated scheduled sends. Expired FCM tokens are removed. Push tests have a one-minute per-user cooldown.
 
 The public VAPID certificate is in `public/config.js`; its private key stays with Firebase. `node scripts/setup-push.cjs` enables FCM/registration/installation APIs and grants the existing `progress-runner` service account Firebase Cloud Messaging API Admin (`roles/firebasecloudmessaging.admin`) alongside its Firestore role. No additional private key or GitHub secret is needed. Firestore rules isolate device tokens and preferences by UID; browser clients cannot write delivery receipts or message content.
 
@@ -141,6 +146,14 @@ gh secret set TELEGRAM_CHAT_ID --repo bharat24082007-spec/bharat_tracker
 ```
 
 ## 7. Publish
+
+### Account export and deletion
+
+Under **Connections → Account & data**, **Download my data** exports the full private workspace as JSON, including recurring schedules and reminder preferences. Device push tokens, internal delivery receipts, and security markers are excluded. Keep the downloaded file private.
+
+Account deletion requires typing `DELETE` and completing a fresh Google verification. It queues only the signed-in user's cleanup request and immediately locks that workspace. The worker deletes that Firebase Authentication user and recursively removes their Firestore workspace. It does not delete their Google account. A minimal UID security marker remains outside the workspace to prevent unexpired login tokens from recreating deleted data. Cleanup is irreversible, can take several minutes, and is retried if a run is interrupted. A later Google sign-in creates a new Firebase user and empty workspace after cleanup.
+
+For a new deployment, run `node scripts/setup-deletion.cjs` once. It grants the existing runner a custom role containing only `firebaseauth.users.delete`; Firestore cleanup uses its existing Datastore User role. This project's role is already configured. The runner never deletes a user without their validated request. Rules tests cover cross-user denial, recent-authentication requirements, workspace lockdown, and token-resurrection prevention. `tests/test_account_emulator.py` verifies recursive cleanup against the demo Firestore emulator with Authentication deletion mocked. It never deletes a production account.
 
 ```powershell
 npx firebase deploy --only firestore:rules,hosting --project bharat-tracker-bdcf0

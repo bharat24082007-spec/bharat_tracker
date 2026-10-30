@@ -19,6 +19,9 @@ def save(root, result, day):
     # Atomically preserve a manual entry or successful earlier daily observation.
     @firestore.transactional
     def update(tx):
+        marker = firestore.client().collection('accountDeletions').document(root.id)
+        if marker.get(transaction=tx).exists:
+            return
         if result.get('username'):
             profile = root.get(transaction=tx).to_dict() or {}
             if profile.get('profiles', {}).get(result['platform']) != result['username']:
@@ -30,9 +33,22 @@ def save(root, result, day):
             return
         merged = dict(result, day=day)
         if result['solved'] is None and old.get('solved') is not None:
-            merged = dict(old, status=result['status'], last_attempt_at=result['fetched_at'])
+            merged = dict(old, status=result['status'], error=result.get('error', 'FetchError'), last_attempt_at=result['fetched_at'])
         tx.set(ref, merged)
     update(transaction)
+
+# Update sync metadata only while the workspace exists and is not being deleted.
+def save_sync_status(root, fields):
+    tx = firestore.client().transaction()
+
+    # Reading the deletion marker inside the transaction prevents a concurrent cleanup race.
+    @firestore.transactional
+    def update(transaction):
+        marker = firestore.client().collection('accountDeletions').document(root.id).get(transaction=transaction)
+        workspace = root.get(transaction=transaction)
+        if not marker.exists and workspace.exists:
+            transaction.update(root, fields)
+    update(tx)
 
 # Read a small personal collection and retain each document ID.
 def read(root, collection):

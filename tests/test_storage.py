@@ -12,6 +12,7 @@ class StorageTests(unittest.TestCase):
         transaction = MagicMock()
         with patch('tracker.store.firestore.client') as client, patch('tracker.store.firestore.transactional', side_effect=lambda f: f):
             client.return_value.transaction.return_value = transaction
+            client.return_value.collection.return_value.document.return_value.get.return_value.exists = False
             save(root, snapshot('leetcode', status='unavailable'), '2026-10-28')
         root.collection.return_value.document.assert_called_once_with('2026-10-28_leetcode')
         saved = transaction.set.call_args.args[1]
@@ -26,6 +27,7 @@ class StorageTests(unittest.TestCase):
         transaction = MagicMock()
         with patch('tracker.store.firestore.client') as client, patch('tracker.store.firestore.transactional', side_effect=lambda f: f):
             client.return_value.transaction.return_value = transaction
+            client.return_value.collection.return_value.document.return_value.get.return_value.exists = False
             save(root, snapshot('gfg', 10), '2026-10-28')
         transaction.set.assert_not_called()
 
@@ -36,6 +38,7 @@ class StorageTests(unittest.TestCase):
         transaction = MagicMock()
         with patch('tracker.store.firestore.client') as client, patch('tracker.store.firestore.transactional', side_effect=lambda f: f):
             client.return_value.transaction.return_value = transaction
+            client.return_value.collection.return_value.document.return_value.get.return_value.exists = False
             save(root, snapshot('leetcode', 9, username='old-user'), '2026-10-30')
         transaction.set.assert_not_called()
 
@@ -47,5 +50,6 @@ class StorageTests(unittest.TestCase):
         transaction = MagicMock()
         with patch('tracker.store.firestore.client') as client, patch('tracker.store.firestore.transactional', side_effect=lambda f: f):
             client.return_value.transaction.return_value = transaction
+            client.return_value.collection.return_value.document.return_value.get.return_value.exists = False
             save(root, snapshot('gfg', 3, username='new-user'), '2026-10-30')
         self.assertEqual(transaction.set.call_args.args[1]['solved'], 3)

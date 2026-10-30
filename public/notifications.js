@@ -100,7 +100,9 @@ export function initializeNotifications(app, auth, db) {
   document.querySelector('#push-preferences').onsubmit = async event => {
     event.preventDefault();
     try {
-      await setDoc(doc(db, 'users', uid, 'settings', 'notifications'), {tasks: document.querySelector('#push-tasks').checked, streak: document.querySelector('#push-streak').checked}, {merge: true});
+      const morningTime = document.querySelector('#push-morning').value, eveningTime = document.querySelector('#push-evening').value;
+      if (!morningTime || !eveningTime || morningTime >= eveningTime) throw Error('Choose a morning time before your evening time. Times use IST.');
+      await setDoc(doc(db, 'users', uid, 'settings', 'notifications'), {tasks: document.querySelector('#push-tasks').checked, streak: document.querySelector('#push-streak').checked, morningTime, eveningTime}, {merge: true});
       help.textContent = 'Reminder preferences saved for your devices.';
     } catch (error) { report(error); }
   };
@@ -121,6 +123,8 @@ export function initializeNotifications(app, auth, db) {
         const prefs = snapshot.data() || {};
         document.querySelector('#push-tasks').checked = prefs.tasks !== false;
         document.querySelector('#push-streak').checked = prefs.streak !== false;
+        document.querySelector('#push-morning').value = prefs.morningTime || '07:30';
+        document.querySelector('#push-evening').value = prefs.eveningTime || '21:00';
         if (prefs.testRequest && prefs.testRequest === prefs.lastTestRequest) {
           help.textContent = prefs.testStatus === 'sent' ? 'Test accepted by the push service. When the page is open, the message appears in this panel; otherwise, check your device notifications.' : 'The test could not be sent. Try disabling and enabling this device again.';
           renderDevice();

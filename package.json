@@ -5,7 +5,7 @@
   "scripts": {
     "fetch": "node scripts/fetch-local.cjs",
     "watch": "node scripts/watch-local.cjs",
-    "test": "node --test tests/metrics.test.js tests/planner.test.js tests/profiles.test.js",
+    "test": "node --test tests/metrics.test.js tests/planner.test.js tests/profiles.test.js tests/review.test.js",
     "test:rules": "firebase emulators:exec --only firestore --project demo-progress-tracker \"node --test tests/rules.test.js\""
   },
   "devDependencies": {

@@ -1,18 +1,30 @@
 import hashlib
+import re
 from datetime import datetime
 from firebase_admin import firestore, messaging
 from .common import now
 from .metrics import delta
 
-# Build generic reminders for opted-in users during bounded IST delivery windows.
+# Convert a valid reminder time to minutes, keeping old preferences backward-compatible.
+def reminder_minutes(value, default):
+    if not isinstance(value, str) or not re.fullmatch(r'([01][0-9]|2[0-3]):[0-5][0-9]', value):
+        value = default
+    hour, minute = map(int, value.split(':'))
+    return hour * 60 + minute
+
+# Build generic reminders inside the user's chosen two-hour IST delivery windows.
 def reminder_plan(profiles, rows, tasks, preferences, timestamp):
     moment = datetime.fromisoformat(timestamp)
-    day, hour = moment.date().isoformat(), moment.hour + moment.minute / 60
+    day, minute = moment.date().isoformat(), moment.hour * 60 + moment.minute
+    morning = reminder_minutes(preferences.get('morningTime'), '07:30')
+    evening = reminder_minutes(preferences.get('eveningTime'), '21:00')
+    if morning >= evening:
+        morning, evening = 450, 1260
     pending = [t for t in tasks if not t.get('done') and t.get('due') and t['due'] <= day]
     missed = sum(t['due'] < day for t in pending)
-    if 7.5 <= hour < 12 and preferences.get('tasks', True) and pending:
+    if morning <= minute < min(morning + 120, evening) and preferences.get('tasks', True) and pending:
         return [{'id': day + '_morning', 'title': 'Your plan for today', 'body': f'{len(pending)} tasks need your attention, including {missed} past their due date.', 'url': '/?view=planner'}]
-    if 21 <= hour < 24:
+    if evening <= minute < min(evening + 120, 1440):
         parts = []
         if preferences.get('tasks', True) and pending:
             parts.append(f'{len(pending)} tasks are still open. Finish them or plan a new date.')
@@ -65,6 +77,8 @@ def deliver(root, device, event):
 
 # Process queued tests and daily reminders even for users with no linked coding profiles.
 def process_notifications(root):
+    if firestore.client().collection('accountDeletions').document(root.id).get().exists:
+        return
     devices = list(root.collection('devices').limit(100).stream())
     if not devices:
         return
