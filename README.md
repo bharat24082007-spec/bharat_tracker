@@ -175,3 +175,6 @@ The product and installed app are named **Momentum**. Hosting deploys to `moment
 
 
 The sign-in cover uses the supplied design from `ui/outputs/momentum-sign-in`. Its integrated styles live in `public/signin.css` and are scoped to `#login`; the sample preview is illustrative and never written to Firestore. The Google button uses the existing Firebase authentication handler. Test the signed-out cover locally with `node scripts/build-ui-fixture.cjs`, serve `artifacts/ui`, and open `/?signedout=1`. This fixture simulates sign-in and sign-out entirely in memory.
+
+
+Sign-out ends Firebase authentication even when push cleanup fails or stalls (cleanup waits at most 2.5 seconds). It clears local push ownership first, attempts device/token removal independently, and reports unfinished cleanup separately from authentication. Rejected cleanup, hanging cleanup, no saved device, and late failures have regression tests. UI fixtures support `?cleanup=fail` and `?cleanup=hang` to test logout and subsequent login without production writes. Both the Momentum address and the legacy Hosting address receive the same releases so old bookmarks can load the fixes after refreshing.

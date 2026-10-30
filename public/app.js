@@ -6,6 +6,7 @@ import {profileUsername, profileUrl} from './profiles.js';
 import {platforms, today, shift, delta, streak, goalProgress} from './metrics.js';
 import {taskStatus, selectTasks, reschedule} from './planner.js';
 import {initializeNotifications} from './notifications.js';
+import {completeSignOut} from './signout.js';
 import {weeklyReview} from './review.js';
 import {exportWorkspace, requestAccountDeletion} from './account.js';
 
@@ -323,7 +324,7 @@ async function session(user) {
       const root = doc(db, 'users', user.uid), existing = await transaction.get(root);
       if (!existing.exists()) transaction.set(root, {profiles: {}, syncRequest: ''});
     });
-  } catch (error) { report(error); return; }
+  } catch (error) { if (generation === version && auth.currentUser?.uid === user.uid) report(error); return; }
   if (generation !== version) return;
   const initialView = new URLSearchParams(location.search).get('view');
   showView(initialView || 'today');
@@ -337,7 +338,7 @@ async function session(user) {
     if (changed) for (const platform of platforms) $('#connections-form').elements[platform].value = profiles[platform] ? profileUrl(platform, profiles[platform]) : '';
     if (!Object.keys(profiles).length && changed) showView('connections');
     render();
-  }, report));
+  }, error => { if (generation === version && auth.currentUser?.uid === user.uid) report(error); }));
   for (const name of ['snapshots', 'todos', 'goals', 'skills', 'routines']) {
     subscriptions.push(onSnapshot(records(name), snapshot => {
       if (generation !== version) return;
@@ -348,7 +349,7 @@ async function session(user) {
       if (name === 'skills') skills = values;
       if (name === 'routines') routines = values;
       render();
-    }, report));
+    }, error => { if (generation === version && auth.currentUser?.uid === user.uid) report(error); }));
   }
   render();
 }
@@ -356,9 +357,10 @@ async function session(user) {
 // Save a form once at a time and show network or validation failures.
 async function submit(event, action) {
   event.preventDefault();
+  const savingUid = ownerUid;
   const form = event.target, button = form.querySelector('button[type="submit"], button:not([type])'); button.disabled = true;
-  try { await action(new FormData(form)); if (form.id !== 'connections-form') form.reset(); if (form.id === 'todo-form') { form.elements.due.value = today(); $('#task-dialog').close(); } $('#message').textContent = 'Saved.'; setTimeout(() => { if ($('#message').textContent === 'Saved.') $('#message').textContent = ''; }, 3500); }
-  catch (error) { report(error); }
+  try { await action(new FormData(form)); if (ownerUid !== savingUid) return; if (form.id !== 'connections-form') form.reset(); if (form.id === 'todo-form') { form.elements.due.value = today(); $('#task-dialog').close(); } $('#message').textContent = 'Saved.'; setTimeout(() => { if ($('#message').textContent === 'Saved.') $('#message').textContent = ''; }, 3500); }
+  catch (error) { if (ownerUid === savingUid) report(error); }
   finally { button.disabled = false; }
 }
 
@@ -384,8 +386,20 @@ function start() {
   }
   const app = initializeApp(firebaseConfig); db = getFirestore(app); auth = getAuth(app);
   const notifications = initializeNotifications(app, auth, db);
-  $('#signin').onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(report);
-  $('#logout').onclick = async () => { try { await notifications.beforeSignOut(); await signOut(auth); } catch (error) { report(error); } };
+  $('#signin').onclick = async () => {
+    $('#signin').disabled = true; $('#message').textContent = '';
+    try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+    catch (error) { if (error.code !== 'auth/popup-closed-by-user') report(error); }
+    finally { $('#signin').disabled = false; }
+  };
+  $('#logout').onclick = async () => {
+    const button = $('#logout'); button.disabled = true; button.textContent = 'Signing out…';
+    try {
+      const cleaned = await completeSignOut(notifications.beforeSignOut, () => signOut(auth));
+      $('#message').textContent = cleaned ? 'Signed out.' : 'Signed out. Notification cleanup could not finish; check this browser’s notification settings.';
+    } catch (error) { report(error); }
+    finally { button.disabled = false; button.textContent = 'Sign out'; }
+  };
   onAuthStateChanged(auth, session);
   $('#chart-platform').onchange = renderChart;
   $('#topic-platform').onchange = renderTopics;

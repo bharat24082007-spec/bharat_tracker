@@ -1,6 +1,7 @@
 import {getMessaging, getToken, deleteToken, isSupported, onMessage} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-messaging.js';
 import {onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {doc, getDoc, setDoc, deleteDoc, onSnapshot, runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {sessionOwner} from './push-session.js';
 import {vapidKey} from './config.js?v=push1';
 
 // Connect install prompts, per-device subscriptions, private preferences, and test requests.
@@ -14,10 +15,9 @@ export function initializeNotifications(app, auth, db) {
   ]) : Promise.resolve(null);
   registration.catch(() => { status.textContent = 'App worker unavailable'; });
 
-  // Keep this worker bound to the signed-in account, including after the worker restarts.
+  // Persist push ownership directly so sign-out never waits for service-worker startup.
   async function bindWorker(owner) {
-    const worker = await registration;
-    worker?.active?.postMessage({type: 'MOMENTUM_SESSION', uid: owner});
+    await sessionOwner(owner);
   }
 
   // Reflect browser permission and this device's saved subscription in the controls.
@@ -29,15 +29,22 @@ export function initializeNotifications(app, auth, db) {
     test.disabled = !deviceId || permission !== 'granted';
   }
 
-  // Remove the server registration and invalidate this browser's token before signing out.
+  // Suppress pushes locally first, then independently clean up this device's registrations.
   async function disconnect() {
-    await bindWorker(null).catch(() => {});
-    const stored = uid && localStorage.getItem('momentum-push:' + uid);
-    if (uid && stored) await deleteDoc(doc(db, 'users', uid, 'devices', stored));
-    if (messaging) await deleteToken(messaging);
-    if (uid) localStorage.removeItem('momentum-push:' + uid);
-    localStorage.removeItem('momentum-push-owner');
-    deviceId = null; renderDevice();
+    const owner = uid;
+    ++version; stop(); uid = null; deviceId = null;
+    const cleanup = [bindWorker(null)];
+    let stored;
+    try {
+      stored = owner && localStorage.getItem('momentum-push:' + owner);
+      if (owner) localStorage.removeItem('momentum-push:' + owner);
+      localStorage.removeItem('momentum-push-owner');
+    } catch (error) { cleanup.push(Promise.reject(error)); }
+    if (owner && stored) cleanup.push(deleteDoc(doc(db, 'users', owner, 'devices', stored)));
+    if (messaging && stored) cleanup.push(deleteToken(messaging));
+    renderDevice();
+    const results = await Promise.allSettled(cleanup);
+    if (results.some(result => result.status === 'rejected')) throw Error('Device cleanup could not finish. Check your connection and try again.');
   }
 
   // Subscribe only after a direct user gesture and save the token inside that user's workspace.
@@ -68,7 +75,7 @@ export function initializeNotifications(app, auth, db) {
       if (!existing.exists()) transaction.set(root, {profiles: {}, syncRequest: ''});
       transaction.set(doc(db, 'users', owner, 'devices', id), {token, updatedAt: new Date().toISOString()});
     });
-    if (uid !== owner || version !== currentVersion) return;
+    if (uid !== owner || version !== currentVersion) { await deleteToken(messaging).catch(() => {}); return; }
     if (oldId && oldId !== id) await deleteDoc(doc(db, 'users', owner, 'devices', oldId));
     deviceId = id;
     localStorage.setItem('momentum-push:' + owner, id);
@@ -89,7 +96,7 @@ export function initializeNotifications(app, auth, db) {
     await installPrompt.prompt(); installPrompt = null; document.querySelector('#install-app').hidden = true;
   };
   enable.onclick = async () => { enable.disabled = true; try { await subscribe(true); } catch (error) { report(error); } };
-  disableButton.onclick = async () => { try { await disconnect(); help.textContent = 'Reminders disabled on this device.'; } catch (error) { report(error); } };
+  disableButton.onclick = async () => { try { await disconnect(); help.textContent = 'Reminders disabled on this device.'; } catch (error) { report(error); } finally { if (auth.currentUser) await sessionChanged(auth.currentUser); } };
   test.onclick = async () => {
     test.disabled = true;
     try {
@@ -108,7 +115,7 @@ export function initializeNotifications(app, auth, db) {
   };
 
   // Reconnect saved devices without another prompt and invalidate tokens after an account switch.
-  onAuthStateChanged(auth, async user => {
+  async function sessionChanged(user) {
     stop(); const currentVersion = ++version; uid = user?.emailVerified ? user.uid : null; deviceId = null;
     try {
       await bindWorker(uid);
@@ -133,7 +140,8 @@ export function initializeNotifications(app, auth, db) {
       if (localStorage.getItem('momentum-push:' + uid) && 'Notification' in window && Notification.permission === 'granted') await subscribe(false);
       else renderDevice();
     } catch (error) { report(error); }
-  });
+  }
+  onAuthStateChanged(auth, sessionChanged);
 
   // Keep foreground messages inside the signed-in app instead of producing duplicate OS alerts.
   isSupported().then(value => {

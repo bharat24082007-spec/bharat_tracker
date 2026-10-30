@@ -5,7 +5,7 @@ fs.mkdirSync(directory, {recursive: true});
 fs.cpSync('public', directory, {recursive: true});
 let app = fs.readFileSync('public/app.js', 'utf8').replace(/https:\/\/www\.gstatic\.com\/firebasejs\/[^']+/g, './ui-firebase.js');
 app = app.replace("'./notifications.js'", "'./ui-notifications.js'");
-fs.writeFileSync(path.join(directory, 'ui-notifications.js'), "// Disable real push subscriptions in the isolated sample-data fixture.\nexport function initializeNotifications() { document.querySelector('#push-status').textContent = 'Disabled in UI fixture'; return {beforeSignOut: async () => {}}; }\n");
+fs.writeFileSync(path.join(directory, 'ui-notifications.js'), "// Disable real push subscriptions in the isolated sample-data fixture.\nexport function initializeNotifications() { document.querySelector('#push-status').textContent = 'Disabled in UI fixture'; return {beforeSignOut: async () => { const mode = new URLSearchParams(location.search).get('cleanup'); if (mode === 'fail') throw Error('Simulated notification cleanup failure'); if (mode === 'hang') await new Promise(() => {}); }}; }\n");
 fs.writeFileSync(path.join(directory, 'app.js'), app);
 fs.copyFileSync('tests/ui-firebase.js', path.join(directory, 'ui-firebase.js'));
 let account = fs.readFileSync('public/account.js', 'utf8').replace(/https:\/\/www\.gstatic\.com\/firebasejs\/[^']+/g, './ui-firebase.js');
