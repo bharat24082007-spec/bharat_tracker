@@ -82,7 +82,7 @@ function renderCards() {
     const descriptions = {HTTPError: 'The provider rejected the request or is temporarily blocking access.', URLError: 'The provider could not be reached.', TimeoutError: 'The provider took too long to respond.', ValueError: 'The public profile could not be read. Check the username; the provider may have changed its response.'};
     health.append(title, element('p', status === 'unavailable' ? descriptions[current?.error] || 'The last fetch failed. Your last known count is preserved.' : !value ? 'Waiting for the first server fetch.' : 'The latest saved profile snapshot is available.', 'muted'));
     if (current?.last_attempt_at || current?.fetched_at) health.append(element('p', 'Last attempt: ' + new Date(current.last_attempt_at || current.fetched_at).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' IST', 'muted'));
-    const retry = element('button', 'Request another sync'); retry.disabled = Boolean(account.syncRequest && account.syncRequest !== account.lastSyncRequest);
+    const retry = element('button', 'Request another sync'); retry.disabled = !platforms.every(p => profiles[p]) || Boolean(account.syncRequest && account.syncRequest !== account.lastSyncRequest);
     retry.onclick = () => requestSync().catch(report); health.append(retry); card.append(health);
     $('#cards').append(card);
   }
@@ -257,6 +257,7 @@ function openTask() {
 
 // Queue a user's refresh request without allowing changes to server-owned sync metadata.
 async function requestSync() {
+  if (!platforms.every(platform => profiles[platform])) throw Error('Connect all four profiles before requesting a sync.');
   $('#sync').disabled = true;
   try { await setDoc(doc(db, 'users', ownerUid), {syncRequest: new Date().toISOString()}, {merge: true}); }
   catch (error) { $('#sync').disabled = false; throw error; }
@@ -302,10 +303,11 @@ function renderGoals() {
 function render() {
   rows = allRows.filter(r => profiles[r.platform] && r.username === profiles[r.platform]);
   $('#date').textContent = new Intl.DateTimeFormat('en-IN', {timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long'}).format(new Date());
-  $('#connection-count').textContent = `${Object.keys(profiles).length} / 4 connected`;
+  const connectedCount = platforms.filter(platform => profiles[platform]).length;
+  $('#connection-count').textContent = `${connectedCount} / 4 connected`;
   const pending = account.syncRequest && account.syncRequest !== account.lastSyncRequest;
-  $('#sync-status').textContent = pending ? 'Refresh queued. Keep working; your cards update when the worker finishes.' : account.lastSyncAt ? `Last sync ${new Date(account.lastSyncAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST` : 'Connect a public profile to start your history.';
-  $('#sync').disabled = !Object.keys(profiles).length || Boolean(pending);
+  $('#sync-status').textContent = pending ? 'Refresh queued. Keep working; your cards update when the worker finishes.' : connectedCount < platforms.length ? `${connectedCount}/4 profile links connected. Add all four to enable sync.` : account.lastSyncAt ? `Last sync ${new Date(account.lastSyncAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST` : 'All four profiles are ready for the first sync.';
+  $('#sync').disabled = connectedCount < platforms.length || Boolean(pending);
   renderCards(); renderChart(); renderTopics(); renderTodos(); renderGoals(); renderReview(); renderToday();
 }
 
@@ -440,12 +442,16 @@ function start() {
   };
   $('#connections-form').onsubmit = event => submit(event, async data => {
     const links = {};
-    for (const platform of platforms) { const value = profileUsername(platform, data.get(platform)); if (value) links[platform] = value; }
-    const fields = {profiles: links};
-    if (Object.keys(links).length) fields.syncRequest = new Date().toISOString();
-    await setDoc(doc(db, 'users', ownerUid), fields, {mergeFields: Object.keys(fields)});
+    if (platforms.some(platform => !String(data.get(platform) || '').trim())) throw Error('Enter all four profile links before saving. No sync was requested.');
+    for (const platform of platforms) {
+      const input = String(data.get(platform) || '').trim();
+      if (!/^https:\/\//i.test(input)) throw Error('It is an invalid link. Please re-enter the correct link.');
+      links[platform] = profileUsername(platform, input);
+    }
+    if (!platforms.every(platform => links[platform])) throw Error('Enter all four profile links before saving and requesting a sync.');
+    await setDoc(doc(db, 'users', ownerUid), {profiles: links, syncRequest: new Date().toISOString()}, {mergeFields: ['profiles', 'syncRequest']});
     showView('platforms');
-    return Object.keys(links).length ? 'Profiles saved. Sync requested.' : 'No profiles connected. No sync requested.';
+    return 'All four profile links saved. Sync requested.';
   });
   $('#todo-form [name="due"]').value = today();
   $('#task-date').value = today();

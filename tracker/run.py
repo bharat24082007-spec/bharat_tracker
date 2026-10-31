@@ -78,7 +78,12 @@ def main():
             profile = root.get().to_dict() or {}
             linked = {platform: handle for platform, handle in (profile.get('profiles') or {}).items()
                       if platform in MODULES and isinstance(handle, str) and handle.strip()}
-            if not linked or (args.due_only and not needs_sync(profile)):
+            if set(linked) != set(MODULES):
+                if profile.get('syncRequest') != profile.get('lastSyncRequest'):
+                    save_sync_status(root, {'lastSyncRequest': profile.get('syncRequest', '')})
+                process_notifications(root)
+                continue
+            if args.due_only and not needs_sync(profile):
                 process_notifications(root)
                 continue
             results = fetch_profiles(linked)
