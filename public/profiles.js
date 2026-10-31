@@ -4,20 +4,21 @@ export const profileHosts = {leetcode: 'leetcode.com', codechef: 'codechef.com',
 export function profileUsername(platform, input) {
   let value = input.trim();
   if (!value) return '';
-  if (value.includes('/') || value.includes('.com') || value.includes('.org')) {
-    const url = new URL(value.startsWith('http') ? value : 'https://' + value);
-    if (url.protocol !== 'https:' || url.username || url.password || url.port) throw Error('Use an HTTPS profile link.');
+  if (/^(https?:\/\/|www\.)/i.test(value) || value.includes('/') || value.includes('.')) {
+    let url;
+    try { url = new URL(value.startsWith('http') ? value : 'https://' + value); }
+    catch { throw Error('Invalid profile link. Paste a supported profile URL or a username.'); }
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) throw Error('Invalid profile link. Use an HTTPS link without credentials or a port.');
     const host = url.hostname.replace(/^www\./, '');
-    if (![profileHosts[platform], ...(platform === 'gfg' ? ['auth.geeksforgeeks.org'] : [])].includes(host)) throw Error(`Use a ${profileHosts[platform]} profile link.`);
+    if (![profileHosts[platform], ...(platform === 'gfg' ? ['auth.geeksforgeeks.org'] : [])].includes(host)) throw Error(`Invalid profile link. Use a ${profileHosts[platform]} profile link.`);
     const parts = url.pathname.split('/').filter(Boolean);
-    if (platform === 'leetcode' && parts[0] === 'u') parts.shift();
-    if (platform === 'codechef' && parts[0] === 'users') parts.shift();
-    if (platform === 'gfg' && ['user', 'profile'].includes(parts[0])) parts.shift();
-    if (platform === 'hackerrank' && parts[0] === 'profile') parts.shift();
-    if (parts.length !== 1) throw Error('Paste the profile link, not a problem or contest link.');
+    const routes = {leetcode: ['u'], codechef: ['users'], gfg: ['user', 'profile'], hackerrank: ['profile']};
+    if (!routes[platform] || !routes[platform].includes(parts[0])) throw Error('Invalid profile link. Paste the platform profile page, not a problem or contest link.');
+    parts.shift();
+    if (parts.length !== 1) throw Error('Invalid profile link. Paste the platform profile page, not a problem or contest link.');
     value = parts[0];
   }
-  if (!/^[A-Za-z0-9_-]{1,60}$/.test(value)) throw Error('Usernames may contain letters, numbers, underscores, or hyphens.');
+  if (!/^[A-Za-z0-9_-]{1,60}$/.test(value)) throw Error('Invalid profile link or username. Usernames may contain letters, numbers, underscores, or hyphens.');
   return value;
 }
 

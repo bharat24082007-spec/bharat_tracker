@@ -12,7 +12,7 @@ MODULES = dict(zip(('leetcode', 'codechef', 'gfg', 'hackerrank'), (leetcode, cod
 def fetch_profiles(profiles):
     results = []
     for platform, handle in profiles.items():
-        if platform in MODULES:
+        if platform in MODULES and isinstance(handle, str) and handle.strip():
             result = safe_fetch(platform, lambda: MODULES[platform].fetch(username(handle)))
             results.append(dict(result, username=handle))
     return results
@@ -76,10 +76,12 @@ def main():
                 continue
             materialize_routines(root)
             profile = root.get().to_dict() or {}
-            if not profile.get('profiles') or (args.due_only and not needs_sync(profile)):
+            linked = {platform: handle for platform, handle in (profile.get('profiles') or {}).items()
+                      if platform in MODULES and isinstance(handle, str) and handle.strip()}
+            if not linked or (args.due_only and not needs_sync(profile)):
                 process_notifications(root)
                 continue
-            results = fetch_profiles(profile['profiles'])
+            results = fetch_profiles(linked)
             save_failed = False
             for result in results:
                 try:

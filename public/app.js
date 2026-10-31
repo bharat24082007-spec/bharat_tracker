@@ -333,8 +333,9 @@ async function session(user) {
   subscriptions.push(onSnapshot(doc(db, 'users', ownerUid), snapshot => {
     if (generation !== version) return;
     account = snapshot.data() || {};
-    const changed = JSON.stringify(profiles) !== JSON.stringify(account.profiles || {});
-    profiles = account.profiles || {};
+    const connected = Object.fromEntries(Object.entries(account.profiles || {}).filter(([platform, handle]) => platforms.includes(platform) && typeof handle === 'string' && handle.trim()));
+    const changed = JSON.stringify(profiles) !== JSON.stringify(connected);
+    profiles = connected;
     if (changed) for (const platform of platforms) $('#connections-form').elements[platform].value = profiles[platform] ? profileUrl(platform, profiles[platform]) : '';
     if (!Object.keys(profiles).length && changed) showView('connections');
     render();
@@ -359,7 +360,7 @@ async function submit(event, action) {
   event.preventDefault();
   const savingUid = ownerUid;
   const form = event.target, button = form.querySelector('button[type="submit"], button:not([type])'); button.disabled = true;
-  try { await action(new FormData(form)); if (ownerUid !== savingUid) return; if (form.id !== 'connections-form') form.reset(); if (form.id === 'todo-form') { form.elements.due.value = today(); $('#task-dialog').close(); } $('#message').textContent = 'Saved.'; setTimeout(() => { if ($('#message').textContent === 'Saved.') $('#message').textContent = ''; }, 3500); }
+  try { const feedback = await action(new FormData(form)); if (ownerUid !== savingUid) return; if (form.id !== 'connections-form') form.reset(); if (form.id === 'todo-form') { form.elements.due.value = today(); $('#task-dialog').close(); } $('#message').textContent = feedback || 'Saved.'; setTimeout(() => { if ($('#message').textContent === (feedback || 'Saved.')) $('#message').textContent = ''; }, 3500); }
   catch (error) { if (ownerUid === savingUid) report(error); }
   finally { button.disabled = false; }
 }
@@ -427,8 +428,11 @@ function start() {
   $('#connections-form').onsubmit = event => submit(event, async data => {
     const links = {};
     for (const platform of platforms) { const value = profileUsername(platform, data.get(platform)); if (value) links[platform] = value; }
-    await setDoc(doc(db, 'users', ownerUid), {profiles: links, syncRequest: new Date().toISOString()}, {mergeFields: ['profiles', 'syncRequest']});
+    const fields = {profiles: links};
+    if (Object.keys(links).length) fields.syncRequest = new Date().toISOString();
+    await setDoc(doc(db, 'users', ownerUid), fields, {mergeFields: Object.keys(fields)});
     showView('platforms');
+    return Object.keys(links).length ? 'Profiles saved. Sync requested.' : 'No profiles connected. No sync requested.';
   });
   $('#todo-form [name="due"]').value = today();
   $('#task-date').value = today();
