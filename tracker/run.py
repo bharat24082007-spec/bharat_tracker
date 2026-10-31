@@ -87,8 +87,11 @@ def main():
                 process_notifications(root)
                 continue
             results = fetch_profiles(linked)
+            invalid_profiles = any(result.get('status') == 'invalid' for result in results)
             save_failed = False
             for result in results:
+                if invalid_profiles and result.get('status') != 'invalid':
+                    continue
                 try:
                     save(root, result, result['fetched_at'][:10])
                 except Exception:

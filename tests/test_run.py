@@ -43,7 +43,7 @@ class MultiUserTests(unittest.TestCase):
     def test_storage_failure_does_not_mark_sync_complete(self):
         from tracker.run import main
         root = MagicMock(id='owner')
-        root.get.return_value.to_dict.return_value = {'profiles': {'gfg': 'valid-user'}}
+        root.get.return_value.to_dict.return_value = {'profiles': {'leetcode': 'valid-user', 'codechef': 'valid-user', 'gfg': 'valid-user', 'hackerrank': 'valid-user'}}
         with patch('sys.argv', ['tracker', '--all']), patch('tracker.store.database'), patch('tracker.run.fetch_profiles', return_value=[{'platform': 'gfg', 'fetched_at': '2026-10-31T12:00:00+05:30'}]), patch('tracker.store.save', side_effect=RuntimeError), patch('tracker.store.save_sync_status') as metadata, patch('tracker.account.process_deletion', return_value=False), patch('tracker.account.pending_deletion_roots', return_value=[]), patch('tracker.routines.materialize_routines'), patch('tracker.push.process_notifications') as notify, patch('firebase_admin.firestore.client') as client:
             client.return_value.collection.return_value.stream.return_value = [MagicMock(reference=root)]
             with self.assertRaises(SystemExit):

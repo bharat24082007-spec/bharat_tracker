@@ -1,13 +1,15 @@
 import json
 import re
 from html import unescape
-from .common import username, request, snapshot, safe_fetch
+from .common import username, request, snapshot, safe_fetch, InvalidProfileError
 
 # Extract the explicit total, current rating, and available contest history.
 def parse(html):
     text = unescape(re.sub(r'<[^>]+>', ' ', html))
     total = re.search(r'Total\s+Problems\s+Solved\s*:?\s*([\d,]+)', text, re.I)
     if not total:
+        if re.search(r'(user|profile|username).{0,40}(not found|does not exist|invalid)|(not found|does not exist).{0,40}(user|profile)', text, re.I):
+            raise InvalidProfileError('CodeChef profile does not exist')
         raise ValueError('Total Problems Solved missing')
     rating = re.search(r'class=[\"\'][^\"\']*rating-number[^\"\']*[\"\'][^>]*>\s*(\d+)', html)
     history = re.search(r'\ball_rating\s*=\s*(\[.*?\])\s*;', html, re.S)

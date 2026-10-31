@@ -1,5 +1,5 @@
 import json
-from .common import username, request, snapshot, safe_fetch
+from .common import username, request, snapshot, safe_fetch, InvalidProfileError
 
 QUERY = '''query($username: String!) {
   matchedUser(username: $username) {
@@ -19,6 +19,8 @@ def parse(data):
     if data.get('errors'):
         raise ValueError('GraphQL error')
     user = data['data']['matchedUser']
+    if user is None:
+        raise InvalidProfileError('LeetCode profile does not exist')
     split = {item['difficulty'].lower(): item['count'] for item in user['submitStatsGlobal']['acSubmissionNum']}
     topics = {item['tagName']: item['problemsSolved'] for group in user['tagProblemCounts'].values() for item in group}
     contest = data['data'].get('userContestRanking') or {}

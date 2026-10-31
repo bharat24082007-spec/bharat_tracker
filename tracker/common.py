@@ -7,6 +7,10 @@ from zoneinfo import ZoneInfo
 IST = ZoneInfo('Asia/Kolkata')
 PLATFORMS = ('leetcode', 'codechef', 'gfg', 'hackerrank')
 
+# Distinguish a provider-confirmed missing profile from a temporary fetch failure.
+class InvalidProfileError(ValueError):
+    pass
+
 # Validate stored usernames before interpolating them into fixed upstream endpoints.
 def username(value):
     if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,60}', value):
@@ -34,5 +38,9 @@ def snapshot(platform, solved=None, rating=None, status='ok', **extra):
 def safe_fetch(platform, fetch):
     try:
         return fetch()
+    except InvalidProfileError:
+        return snapshot(platform, status='invalid', error='InvalidProfile')
     except Exception as error:
+        if getattr(error, 'code', None) == 404:
+            return snapshot(platform, status='invalid', error='InvalidProfile')
         return snapshot(platform, status='unavailable', error=type(error).__name__)

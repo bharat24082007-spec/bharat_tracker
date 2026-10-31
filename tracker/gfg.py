@@ -1,10 +1,13 @@
 import json
-from .common import username, request, snapshot, safe_fetch
+from .common import username, request, snapshot, safe_fetch, InvalidProfileError
 
 # Read an explicit total from GfG's lightweight profile response.
 def parse(data):
     info = data.get('data', data)
     info = info.get('userInfo', info)
+    message = str(info.get('message', info.get('error', ''))).lower() if isinstance(info, dict) else ''
+    if any(marker in message for marker in ('user not found', 'profile not found', 'invalid user', 'user does not exist')):
+        raise InvalidProfileError('GeeksforGeeks profile does not exist')
     value = info.get('total_problems_solved', info.get('totalProblemsSolved'))
     if value is None:
         raise ValueError('Unrecognized GfG response; use manual entry')

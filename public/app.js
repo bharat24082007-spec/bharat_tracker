@@ -52,6 +52,7 @@ function renderCards() {
   $('#cards').replaceChildren();
   for (const platform of platforms) {
     const value = latest(platform), current = rows.find(r => r.platform === platform && r.day === today());
+    const lastAttempt = rows.filter(r => r.platform === platform).sort((a, b) => b.day.localeCompare(a.day))[0];
     const card = element('article', '', 'card'), heading = element('div', names[platform], 'heading');
     card.dataset.platform = platform;
     if (!profiles[platform]) {
@@ -61,8 +62,8 @@ function renderCards() {
       $('#cards').append(card);
       continue;
     }
-    const status = current?.status || (value ? 'not fetched today' : 'awaiting first fetch');
-    if (status !== 'ok') heading.append(element('span', status, 'badge'));
+    const status = current?.status || (lastAttempt?.status === 'invalid' ? 'invalid' : value ? 'not fetched today' : 'awaiting first fetch');
+    if (status !== 'ok') heading.append(element('span', status === 'invalid' ? 'Invalid link' : status, 'badge'));
     else if (current?.source === 'unofficial-api') heading.append(element('span', 'unofficial API', 'badge'));
     const change = delta(rows, platform, today());
     card.append(heading, element('strong', value?.solved ?? '—'), element('span', 'problems solved', 'muted'),
@@ -79,8 +80,9 @@ function renderCards() {
     const link = element('a', '@' + profiles[platform], 'profile-link');
     link.href = profileUrl(platform, profiles[platform]); link.target = '_blank'; link.rel = 'noopener noreferrer'; card.append(link);
     const health = element('details', '', 'connection-health'), title = element('summary', 'Connection health');
-    const descriptions = {HTTPError: 'The provider rejected the request or is temporarily blocking access.', URLError: 'The provider could not be reached.', TimeoutError: 'The provider took too long to respond.', ValueError: 'The public profile could not be read. Check the username; the provider may have changed its response.'};
-    health.append(title, element('p', status === 'unavailable' ? descriptions[current?.error] || 'The last fetch failed. Your last known count is preserved.' : !value ? 'Waiting for the first server fetch.' : 'The latest saved profile snapshot is available.', 'muted'));
+    const descriptions = {InvalidProfile: 'It is an invalid link. Please re-enter the correct link.', HTTPError: 'The provider rejected the request or is temporarily blocking access.', URLError: 'The provider could not be reached.', TimeoutError: 'The provider took too long to respond.', ValueError: 'The public profile could not be read. Check the username; the provider may have changed its response.'};
+    health.open = status === 'invalid';
+    health.append(title, element('p', status === 'invalid' ? descriptions[current?.error || lastAttempt?.error] : status === 'unavailable' ? descriptions[current?.error] || 'The last fetch failed. Your last known count is preserved.' : !value ? 'Waiting for the first server fetch.' : 'The latest saved profile snapshot is available.', 'muted'));
     if (current?.last_attempt_at || current?.fetched_at) health.append(element('p', 'Last attempt: ' + new Date(current.last_attempt_at || current.fetched_at).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' IST', 'muted'));
     const retry = element('button', 'Request another sync'); retry.disabled = !platforms.every(p => profiles[p]) || Boolean(account.syncRequest && account.syncRequest !== account.lastSyncRequest);
     retry.onclick = () => requestSync().catch(report); health.append(retry); card.append(health);

@@ -1,10 +1,15 @@
 import json
-from .common import username, snapshot, request, safe_fetch
+from .common import username, snapshot, request, safe_fetch, InvalidProfileError
 
 # Validate the unofficial API's explicit solved count without confusing rank with rating.
 def parse(data, handle):
     solved = data.get('totalSolved')
-    if data.get('status') != 'success' or data.get('username') != handle:
+    if data.get('username') and data.get('username') != handle:
+        raise InvalidProfileError('HackerRank profile could not be matched')
+    if data.get('status') != 'success':
+        message = str(data.get('message', data.get('error', ''))).lower()
+        if any(marker in message for marker in ('user not found', 'profile not found', 'invalid user', 'user does not exist')):
+            raise InvalidProfileError('HackerRank profile does not exist')
         raise ValueError('Unexpected HackerRank response')
     if type(solved) is not int or solved < 0:
         raise ValueError('Missing or invalid solved count')
