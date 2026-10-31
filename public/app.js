@@ -28,6 +28,15 @@ function report(error) {
   $('#message').textContent = error.message || String(error);
 }
 
+// Remove a terminal DNS dot so Firebase sees the authorized canonical host.
+function canonicalizeHost() {
+  if (!location.hostname.endsWith('.')) return false;
+  const url = new URL(location.href);
+  url.hostname = url.hostname.replace(/\.$/, '');
+  location.replace(url.href);
+  return true;
+}
+
 // Return the owner's collection after successful authentication.
 function records(name) {
   return collection(db, 'users', ownerUid, name);
@@ -367,6 +376,7 @@ async function submit(event, action) {
 
 // Start Firebase and wire dashboard forms without requiring a build step.
 function start() {
+  if (canonicalizeHost()) return;
   $('#view-platforms').append($('#view-skills')); $('#view-skills').hidden = false;
   $('#view-review').append($('#goal-form').closest('.panel'));
   document.querySelectorAll('[data-add-task]').forEach(button => { button.onclick = openTask; });
@@ -390,7 +400,10 @@ function start() {
   $('#signin').onclick = async () => {
     $('#signin').disabled = true; $('#message').textContent = '';
     try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-    catch (error) { if (error.code !== 'auth/popup-closed-by-user') report(error); }
+    catch (error) {
+      if (error.code === 'auth/unauthorized-domain') report(Error('Firebase rejected this site address. Open https://momentum-student-workspace.web.app/ and try again.'));
+      else if (error.code !== 'auth/popup-closed-by-user') report(error);
+    }
     finally { $('#signin').disabled = false; }
   };
   $('#logout').onclick = async () => {
